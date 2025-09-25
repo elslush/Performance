@@ -1,24 +1,22 @@
 ﻿using System.Buffers;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace Performance.Buffers;
 
-/// <summary>
-/// A Resizeable Byte Buffer
-/// </summary>
 public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOwner<byte>
 {
     private byte[]? _array;
     private readonly ArrayPool<byte> _pool;
     private int _index;
-    private volatile bool _disposed;
+    private readonly bool _disposed;
 
-    public ResizableByteWriter(int initialCapacity = 0)
-        : this(ArrayPool<byte>.Shared, initialCapacity) { }
+    public ResizableByteWriter() : this(ArrayPool<byte>.Shared) { }
+
+    public ResizableByteWriter(int initialCapacity = 0) : this(ArrayPool<byte>.Shared, initialCapacity) { }
 
     public ResizableByteWriter(ArrayPool<byte> pool, int initialCapacity = 0)
     {
-        ArgumentNullException.ThrowIfNull(pool);
         ArgumentOutOfRangeException.ThrowIfNegative(initialCapacity);
         _pool = pool;
         _index = 0;
@@ -26,31 +24,22 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
         _array = initialCapacity == 0 ? [] : pool.Rent(initialCapacity);
     }
 
-    // -----------------------------------------------------------------
-    // Stream overrides
-    // -----------------------------------------------------------------
+    public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+    public override long Length => _index;
     public override bool CanRead => false;
     public override bool CanSeek => false;
     public override bool CanWrite => true;
-    public override long Length => _index;
     public override long Position
     {
         get => throw new NotSupportedException();
         set => throw new NotSupportedException();
     }
-
     public override void Flush() { }
     public override Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
     public override void SetLength(long value) => throw new NotSupportedException();
 
-    public override void Write(byte[] buffer, int offset, int count) =>
-        Write(buffer.AsSpan(offset, count));
-
-    // -----------------------------------------------------------------
-    // Public helpers
-    // -----------------------------------------------------------------
     public void Reset() => _index = 0;
 
     public ReadOnlyMemory<byte> WrittenMemory
@@ -59,7 +48,7 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
         get
         {
             ThrowIfDisposed();
-            return new ReadOnlyMemory<byte>(_array!, 0, _index);
+            return new ReadOnlyMemory<byte>(_array, 0, _index);
         }
     }
 
@@ -69,121 +58,116 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
         get
         {
             ThrowIfDisposed();
-            return new ReadOnlySpan<byte>(_array!, 0, _index);
+            return new Span<byte>(_array, 0, _index);
         }
     }
 
-    // -----------------------------------------------------------------
-    // IBufferWriter<byte>
-    // -----------------------------------------------------------------
-    public Memory<byte> GetMemory(int sizeHint = 0)
-    {
-        EnsureCapacity(sizeHint);
-        return new Memory<byte>(_array!, _index, sizeHint);
-    }
-
-    public Span<byte> GetSpan(int sizeHint = 0)
-    {
-        EnsureCapacity(sizeHint);
-        return new Span<byte>(_array!, _index, sizeHint);
-    }
-
-    public void Advance(int count)
-    {
-        if (count < 0) ThrowHelper.ThrowArgumentOutOfRangeException(nameof(count));
-        if (_array is null || count > _array.Length - _index)
-            ThrowHelper.ThrowInvalidOperationException("Attempt to advance beyond the length of the buffer.");
-
-        _index += count;
-    }
-
-    // -----------------------------------------------------------------
-    // Write overloads – hot path
-    // -----------------------------------------------------------------
-    public void Write(byte value)
-    {
-        EnsureCapacity(1);
-        _array![_index++] = value;
-    }
-
-    public override void Write(ReadOnlySpan<byte> source)
-    {
-        EnsureCapacity(source.Length);
-        source.CopyTo(new Span<byte>(_array!, _index, source.Length));
-        _index += source.Length;
-    }
-
-    public void Write(ReadOnlyMemory<byte> source) => Write(source.Span);
-
-    public void Write(byte[] source) => Write(source.AsSpan());
-
-    public override async ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default)
-    {
-        Write(buffer.Span);
-        await Task.CompletedTask.ConfigureAwait(false);
-    }
-
-    // -----------------------------------------------------------------
-    // IMemoryOwner<byte>
-    // -----------------------------------------------------------------
     Memory<byte> IMemoryOwner<byte>.Memory
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         get
         {
             ThrowIfDisposed();
-            return new Memory<byte>(_array!);
+            return new Memory<byte>(_array);
         }
+    }
+
+    public void Advance(int count)
+    {
+        if (count < 0)
+            throw new ArgumentOutOfRangeException(null, nameof(count));
+        if (_array is null || count > _array.Length)
+            throw new InvalidOperationException("Attempt to advance beyond the length of the buffer.");
+        _index += count;
+    }
+
+    public Memory<byte> GetMemory(int sizeHint = 0)
+    {
+        if (sizeHint == 0) sizeHint = 8;
+        Grow(sizeHint);
+        return new Memory<byte>(_array, _index, sizeHint);
+    }
+
+    public Span<byte> GetSpan(int sizeHint = 0)
+    {
+        if (sizeHint == 0) sizeHint = 8;
+        Grow(sizeHint);
+        return new Span<byte>(_array, _index, sizeHint);
+    }
+
+    public new void Write(ReadOnlySpan<byte> items) => Copy(items);
+    public void Write(ReadOnlyMemory<byte> items) => Copy(items.Span);
+    public void Write(byte[] items) => Copy(items);
+    public void Write(byte item)
+    {
+        Grow(1);
+        _array![_index] = item;
+        _index += 1;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void Copy(ReadOnlySpan<byte> items)
+    {
+        Grow(items.Length);
+        var dst = new Span<byte>(_array, _index, items.Length);
+        items.CopyTo(dst);
+        _index += items.Length;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void Grow(int size)
+    {
+        ThrowIfDisposed();
+        if (!GrowIfRequired(size, out var length)) return;
+        var next = _pool.Rent(length);
+        var dst = new Span<byte>(next, 0, _index);
+        var src = new Span<byte>(_array, 0, _index);
+        src.CopyTo(dst);
+        if (_array is not null)
+            _pool.Return(_array, RuntimeHelpers.IsReferenceOrContainsReferences<byte>());
+        _array = next;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private bool GrowIfRequired(int size, out int length)
+    {
+        length = default;
+        var newIndex = checked(_index + size);
+        if (_array?.Length - newIndex >= 0) return false;
+        length = RoundUpPow2Ceiling(newIndex);
+        return true;
     }
 
     public new void Dispose()
     {
         if (_disposed) return;
-        _disposed = true;
-
-        if (_array != null && _array.Length != 0)
+        if (_array != null)
         {
             _pool.Return(_array, RuntimeHelpers.IsReferenceOrContainsReferences<byte>());
             _array = null;
         }
-
         GC.SuppressFinalize(this);
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private void EnsureCapacity(int additional)
+    private static int RoundUpPow2Ceiling(int x)
     {
-        ThrowIfDisposed();
-
-        if (_array!.Length - _index >= additional) return;
-
-        int required = checked(_index + additional);
-        int newCapacity = Math.Max(_array.Length * 2, required);
-        if (newCapacity < 8) newCapacity = 8; // guard against zero‑length growth
-
-        byte[] newArray = _pool.Rent(newCapacity);
-        new Span<byte>(_array, 0, _index).CopyTo(newArray);
-
-        if (_array.Length != 0)
-            _pool.Return(_array, RuntimeHelpers.IsReferenceOrContainsReferences<byte>());
-
-        _array = newArray;
+        checked
+        {
+            --x;
+            x |= x >> 1;
+            x |= x >> 2;
+            x |= x >> 4;
+            x |= x >> 8;
+            x |= x >> 16;
+            ++x;
+        }
+        return x;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    [StackTraceHidden]
     private void ThrowIfDisposed()
     {
-        if (_disposed) ObjectDisposedException.ThrowIf(_disposed, this);
-    }
-
-    private static class ThrowHelper
-    {
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public static void ThrowArgumentOutOfRangeException(string paramName) =>
-            throw new ArgumentOutOfRangeException(paramName);
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public static void ThrowInvalidOperationException(string message) =>
-            throw new InvalidOperationException(message);
+        ObjectDisposedException.ThrowIf(_disposed, this);
     }
 }
