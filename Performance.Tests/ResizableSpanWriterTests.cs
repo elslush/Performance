@@ -189,13 +189,62 @@ public sealed class ResizableSpanWriterTests
         Assert.Equal(returnsBefore + 1, pool.ReturnedCount);
     }
 
+    [Fact]
+    public void SpanWriter_DirectWrite_Invalidates_GetSpanReservation()
+    {
+        // Arrange
+        using var writer = new ResizableSpanWriter<int>();
+        var span = writer.GetSpan(16);
+
+        // Act
+        writer.Write(42);
+
+        // Assert
+        var ex = Assert.Throws<InvalidOperationException>(() => writer.Advance(1));
+        Assert.Equal("Cannot advance past the end of the reserved buffer segment.", ex.Message);
+        Assert.Equal(new int[] { 42 }, writer.WrittenSpan.ToArray());
+    }
+
+    [Fact]
+    public void SpanWriter_Reset_Clears_GetSpanReservation()
+    {
+        // Arrange
+        using var writer = new ResizableSpanWriter<char>();
+        var span = writer.GetSpan(16);
+
+        // Act
+        writer.Reset();
+
+        // Assert
+        var ex = Assert.Throws<InvalidOperationException>(() => writer.Advance(1));
+        Assert.Equal("Cannot advance past the end of the reserved buffer segment.", ex.Message);
+        Assert.Equal(0, writer.WrittenSpan.Length);
+    }
+
+    [Fact]
+    public void SpanWriter_GetMemory_FollowedBy_Write_And_FailedAdvance()
+    {
+        // Arrange
+        using var writer = new ResizableSpanWriter<string>();
+        var memory = writer.GetMemory(10);
+        memory.Span[0] = "first";
+
+        // Act
+        writer.Write("second");
+
+        // Assert
+        var ex = Assert.Throws<InvalidOperationException>(() => writer.Advance(1));
+        Assert.Equal("Cannot advance past the end of the reserved buffer segment.", ex.Message);
+        Assert.Equal(new string[] { "second" }, writer.WrittenSpan.ToArray());
+    }
+
     // ---------- Known-issue: disposal guard ----------
 
     [Fact(Skip = "Current implementation never sets _disposed; post-Dispose APIs should throw ObjectDisposedException but they won't. Consider fixing _disposed.")]
     public void AfterDispose_AccessorsThrow_ObjectDisposedException()
     {
         var w = new ResizableSpanWriter<byte>(initialCapacity: 8);
-        w.Write(new byte[] { 1, 2, 3 });
+        w.Write([1, 2, 3]);
         w.Dispose();
 
         Assert.Throws<ObjectDisposedException>(() => _ = w.WrittenSpan);

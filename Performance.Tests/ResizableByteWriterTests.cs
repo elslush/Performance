@@ -49,7 +49,7 @@ public sealed class ResizableByteWriterTests
     public async Task Stream_Flush_NoOp()
     {
         using var w = new ResizableByteWriter();
-        w.Write((byte)7);
+        w.WriteByte((byte)7);
         w.Flush();
         await w.FlushAsync(CancellationToken.None);
         Assert.Equal(new byte[] { 7 }, w.WrittenSpan.ToArray());
@@ -105,8 +105,8 @@ public sealed class ResizableByteWriterTests
     public void Write_SingleByte_And_Slices()
     {
         using var w = new ResizableByteWriter(initialCapacity: 1);
-        w.Write((byte)1);
-        w.Write((byte)2);
+        w.WriteByte((byte)1);
+        w.WriteByte((byte)2);
 
         var more = new byte[] { 3, 4, 5, 6 };
         w.Write(more.AsSpan(1, 2)); // 4,5
@@ -351,6 +351,63 @@ public sealed class ResizableByteWriterTests
         Assert.True(mem.Length >= w.WrittenSpan.Length);
     }
 
+    [Fact]
+    public void ByteWriter_DirectWrite_Invalidates_GetSpanReservation()
+    {
+        // Arrange
+        using var writer = new ResizableByteWriter();
+        var span = writer.GetSpan(16); // Reserve 16 bytes
+
+        // Act: Perform a direct write, which should invalidate the reservation.
+        writer.WriteByte((byte)42);
+
+        // Assert: Advancing the original reservation should now fail.
+        var ex = Assert.Throws<InvalidOperationException>(() => writer.Advance(1));
+        Assert.Equal("Cannot advance past the end of the reserved buffer segment.", ex.Message);
+
+        // The writer's content should only contain the directly written byte.
+        Assert.Equal(new byte[] { 42 }, writer.WrittenSpan.ToArray());
+    }
+
+    [Fact]
+    public void ByteWriter_Reset_Clears_GetSpanReservation()
+    {
+        // Arrange
+        using var writer = new ResizableByteWriter();
+        var span = writer.GetSpan(16);
+
+        // Act: Reset the writer.
+        writer.Reset();
+
+        // Assert: Advancing the original reservation should fail.
+        var ex = Assert.Throws<InvalidOperationException>(() => writer.Advance(1));
+        Assert.Equal("Cannot advance past the end of the reserved buffer segment.", ex.Message);
+        Assert.Equal(0, writer.Length);
+    }
+
+    [Fact]
+    public void ByteWriter_GetSpan_WithZeroSizeHint_StillRequiresAdvance()
+    {
+        // Arrange
+        using var writer = new ResizableByteWriter();
+
+        // Act
+        var span = writer.GetSpan(0); // This will default to sizeHint = 8
+
+        // Assert
+        // Even though the request was for 0, a buffer is still returned.
+        Assert.True(span.Length >= 8);
+
+        var spanLength = span.Length;
+        // Advancing by more than the *requested* hint (which defaults to 8) should fail.
+        Assert.Throws<InvalidOperationException>(() => writer.Advance(spanLength + 1));
+
+        // Advancing by a valid amount should succeed.
+        span[0] = 1;
+        writer.Advance(1);
+        Assert.Equal(new byte[] { 1 }, writer.WrittenSpan.ToArray());
+    }
+
     // -------- Known-issue: disposed guard doesn't trip --------
     // Your class has a readonly `_disposed` = false and never sets it to true in Dispose(),
     // so ThrowIfDisposed() will never throw. If you fix that, un-skip this test.
@@ -367,7 +424,7 @@ public sealed class ResizableByteWriterTests
         Assert.Throws<ObjectDisposedException>(() => _ = ((IMemoryOwner<byte>)w).Memory);
         Assert.Throws<ObjectDisposedException>(() => w.GetSpan());
         Assert.Throws<ObjectDisposedException>(() => w.GetMemory());
-        Assert.Throws<ObjectDisposedException>(() => w.Write((byte)1));
+        Assert.Throws<ObjectDisposedException>(() => w.WriteByte((byte)1));
         Assert.Throws<ObjectDisposedException>(() => w.Reset());
     }
 

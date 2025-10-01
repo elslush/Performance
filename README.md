@@ -47,7 +47,6 @@ Key features:
 - Zero-allocation enumeration
 - Optimized for common whitespace patterns
 
-<<<<<<< HEAD
 ### 5. Trimming Extensions
 High-performance trimming extensions for memory and span operations that efficiently remove whitespace characters from the start and end of sequences.
 
@@ -58,8 +57,6 @@ Key features:
 - Extension methods for both Memory<byte> and ReadOnlySpan<byte>
 - Support for Trim, TrimStart, and TrimEnd operations
 
-=======
->>>>>>> 6a461782a804dfde533635b78e3abc65bbb89ff9
 ## Why This Library Is Useful
 
 1. **Memory Efficiency**: All components utilize array pooling to minimize garbage collection pressure
@@ -152,7 +149,6 @@ foreach (var token in new WhitespaceSplitEnumerator(input.AsSpan()))
 // Token: '.NET'
 ```
 
-<<<<<<< HEAD
 ### Trimming Extensions Usage
 ```csharp
 using Performance.Extensions;
@@ -167,9 +163,6 @@ Memory<byte> memory = new byte[] { 0x20, 0x09, 0x48, 0x65, 0x6C, 0x6C, 0x6F };
 Memory<byte> trimmedMemory = memory.TrimStart();
 Console.WriteLine($"Trimmed start length: {trimmedMemory.Length}");
 ```
-
-=======
->>>>>>> 6a461782a804dfde533635b78e3abc65bbb89ff9
 ## Performance Benefits
 
 - **Reduced Allocations**: Buffer pooling minimizes garbage collection pressure
@@ -177,10 +170,7 @@ Console.WriteLine($"Trimmed start length: {trimmedMemory.Length}");
 - **Efficient Memory Layout**: Sequential memory access patterns for cache efficiency
 - **Automatic Growth**: Smart buffer sizing prevents frequent reallocations
 - **Stream Compatibility**: Integrates seamlessly with existing stream-based APIs
-<<<<<<< HEAD
 - **Zero-Allocation Trimming**: Trimming operations don't allocate memory
-=======
->>>>>>> 6a461782a804dfde533635b78e3abc65bbb89ff9
 
 ## Testing
 

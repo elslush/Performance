@@ -1,48 +1,53 @@
 ﻿using System;
 using System.Buffers;
-using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Performance.Buffers;
 
+/// <summary>
+/// A high-performance, pooled, resizable buffer writer for generic types.
+/// Implements <see cref="IBufferWriter{T}"/> and <see cref="IMemoryOwner{T}"/>
+/// to provide a flexible and efficient way to build arrays dynamically.
+/// </summary>
 public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
 {
     /// <summary>
-    /// Array on current rental from the array pool.  Reference to the same memory as <see cref="_buffer"/>.
+    /// The underlying array rented from the pool. Can be null if disposed.
     /// </summary>
     private T[]? _array;
 
     /// <summary>
-    /// The <see cref="ArrayPool{T}"/> instance used to rent <see cref="array"/>.
+    /// The <see cref="ArrayPool{T}"/> instance used to rent and return the buffer.
     /// </summary>
     private readonly ArrayPool<T> _pool;
 
     /// <summary>
-    /// The current position of the writer.
+    /// The number of items written to the buffer; the current position of the writer.
     /// </summary>
     private int _index;
 
     /// <summary>
-    /// The disposed state of the buffer.
+    /// The number of items reserved by the last call to GetSpan or GetMemory.
+    /// This is used to validate the count passed to Advance.
     /// </summary>
-    private readonly bool _disposed;
+    private int _available;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="MemoryWriterBuffer{T}"/> class.
+    /// Tracks the disposed state of the writer to prevent use-after-free errors.
+    /// </summary>
+    private bool _disposed;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ResizableSpanWriter{T}"/> class.
     /// </summary>
     public ResizableSpanWriter()
         : this(ArrayPool<T>.Shared)
     {
     }
 
-
     /// <summary>
-    /// Initializes a new instance of the <see cref="MemoryWriterBuffer{T}"/> class.
+    /// Initializes a new instance of the <see cref="ResizableSpanWriter{T}"/> class.
     /// </summary>
     /// <param name="initialCapacity">The incremental size to grow the buffer.</param>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="initialCapacity"/> is not valid.</exception>
@@ -51,12 +56,8 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     {
     }
 
-    //public int Length => _index;
-
-    public void Reset() => _index = 0;
-
     /// <summary>
-    /// Initializes a new instance of the <see cref="MemoryWriterBuffer{T}"/> class.
+    /// Initializes a new instance of the <see cref="ResizableSpanWriter{T}"/> class.
     /// </summary>
     /// <param name="pool">The <see cref="ArrayPool{T}"/> instance to use.</param>
     /// <param name="initialCapacity">The minimum capacity with which to initialize the underlying buffer.</param>
@@ -66,12 +67,21 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
         ArgumentOutOfRangeException.ThrowIfNegative(initialCapacity);
 
         _pool = pool;
-
         _index = 0;
-
+        _available = 0;
         _disposed = false;
-
         _array = initialCapacity == 0 ? [] : pool.Rent(initialCapacity);
+    }
+
+    /// <summary>
+    /// Resets the writer to the beginning of the buffer, allowing it to be reused.
+    /// The underlying allocated buffer is retained for performance.
+    /// </summary>
+    public void Reset()
+    {
+        ThrowIfDisposed();
+        _index = 0;
+        _available = 0;
     }
 
     /// <summary>
@@ -83,7 +93,6 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
         get
         {
             ThrowIfDisposed();
-
             return new ReadOnlyMemory<T>(_array, 0, _index);
         }
     }
@@ -97,7 +106,6 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
         get
         {
             ThrowIfDisposed();
-
             return new Span<T>(_array, 0, _index);
         }
     }
@@ -109,7 +117,6 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
         get
         {
             ThrowIfDisposed();
-
             return new Memory<T>(_array);
         }
     }
@@ -117,22 +124,24 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     /// <inheritdoc />
     public void Advance(int count)
     {
-        if (count < 0)
-            throw new ArgumentOutOfRangeException(nameof(count), "Count must be greater than or equal to 0.");
+        ArgumentOutOfRangeException.ThrowIfNegative(count);
+        ThrowIfDisposed();
 
-        if (_array is null || count > _array.Length)
-            throw new InvalidOperationException("Attempt to advance beyond the length of the buffer.");
+        if (count > _available)
+            throw new InvalidOperationException("Cannot advance past the end of the reserved buffer segment.");
 
         _index += count;
+        _available = 0; // The reservation is consumed after advancing.
     }
 
     /// <inheritdoc />
     public Memory<T> GetMemory(int sizeHint = 0)
     {
         if (sizeHint == 0) sizeHint = 8;
-
+        ThrowIfDisposed();
         Grow(sizeHint);
 
+        _available = sizeHint;
         return new Memory<T>(_array, _index, sizeHint);
     }
 
@@ -140,35 +149,33 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     public Span<T> GetSpan(int sizeHint = 0)
     {
         if (sizeHint == 0) sizeHint = 8;
-
+        ThrowIfDisposed();
         Grow(sizeHint);
 
+        _available = sizeHint;
         return new Span<T>(_array, _index, sizeHint);
     }
 
     /// <summary>
-    /// Appends to the end of the buffer, advances the buffer and automatically growing the buffer if necessary.
+    /// Appends a span of items to the end of the buffer, automatically growing the buffer if necessary.
     /// </summary>
-    /// <param name="items">A <see cref="Span{T}"/> of items to append.</param>
+    /// <param name="items">A <see cref="ReadOnlySpan{T}"/> of items to append.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Write(ReadOnlySpan<T> items)
-        => Copy(items);
+    public void Write(ReadOnlySpan<T> items) => Copy(items);
 
     /// <summary>
-    /// Appends to the end of the buffer, advances the buffer and automatically growing the buffer if necessary.
+    /// Appends a memory block of items to the end of the buffer, automatically growing the buffer if necessary.
     /// </summary>
-    /// <param name="items">A <see cref="Memory{T}"/> of items to append.</param>
+    /// <param name="items">A <see cref="ReadOnlyMemory{T}"/> of items to append.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Write(ReadOnlyMemory<T> items)
-        => Copy(items.Span);
+    public void Write(ReadOnlyMemory<T> items) => Copy(items.Span);
 
     /// <summary>
-    /// Appends to the end of the buffer, advances the buffer and automatically growing the buffer if necessary.
+    /// Appends an array of items to the end of the buffer, automatically growing the buffer if necessary.
     /// </summary>
-    /// <param name="items">A <see cref="Memory{T}"/> of items to append.</param>
+    /// <param name="items">An array of items to append.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Write(T[] items)
-        => Copy(items);
+    public void Write(T[] items) => Copy(items);
 
     /// <summary>
     /// Appends a single item to the end of the buffer, automatically growing the buffer if necessary.
@@ -177,89 +184,79 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Write(T item)
     {
+        _available = 0; // Direct writes invalidate any outstanding reservation.
         Grow(1);
-
         _array![_index] = item;
-
         _index += 1;
     }
 
     /// <summary>
-    /// Copies to the underlying buffer
+    /// Internal helper to copy data to the underlying buffer and advance the index.
     /// </summary>
     /// <param name="items">Items to add.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Copy(ReadOnlySpan<T> items)
     {
+        if (items.IsEmpty) return;
+        _available = 0; // Direct writes invalidate any outstanding reservation.
         Grow(items.Length);
-
-        var dst = new Span<T>(_array, _index, items.Length);
-
-        items.CopyTo(dst);
-
+        items.CopyTo(new Span<T>(_array, _index, items.Length));
         _index += items.Length;
     }
 
     /// <summary>
-    /// Grows the buffer if needed.
+    /// Ensures the buffer has enough space for an upcoming write operation.
+    /// If not, it rents a larger buffer and copies the existing data.
     /// </summary>
-    /// <param name="length"></param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Grow(int size)
     {
         ThrowIfDisposed();
+        if (!GrowIfRequired(size, out var newSize)) return;
 
-        if (!GrowIfRequired(size, out var length)) return;
+        var newBuffer = _pool.Rent(newSize);
+        if (_index > 0)
+        {
+            var source = new ReadOnlySpan<T>(_array, 0, _index);
+            source.CopyTo(newBuffer);
+        }
 
-        var next = _pool.Rent(length);
+        if (_array is not null && _array.Length > 0)
+        {
+            _pool.Return(_array, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+        }
 
-        var dst = new Span<T>(next, 0, _index);
-
-        var src = new Span<T>(_array, 0, _index);
-
-        src.CopyTo(dst);
-
-        _pool.Return(_array!, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
-
-        _array = next;
+        _array = newBuffer;
     }
 
     /// <summary>
-    /// Gets the length to growth the buffer
+    /// Determines if the buffer needs to grow and calculates the required new size.
     /// </summary>
-    /// <param name="length"></param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private bool GrowIfRequired(int size, out int length)
     {
         length = default;
+        var newIndex = checked((long)_index + size);
 
-        var newIndex = checked(_index + size);
+        if (_array is not null && newIndex <= _array.Length)
+        {
+            return false;
+        }
 
-        if (_array!.Length - newIndex >= 0) return false;
-
-        length = RoundUpPow2Ceiling(newIndex);
-
+        length = RoundUpPow2Ceiling((int)newIndex);
         return true;
     }
 
-    /// <inheritdoc />
-    public void Dispose()
-    {
-        if (_disposed) return;
-
-        if (_array != null)
-        {
-            _pool.Return(_array, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
-
-            _array = null;
-        }
-    }
-
+    /// <summary>
+    /// Calculates the next power of two greater than or equal to the input value.
+    /// This is an efficient bit-twiddling algorithm for resizing buffers.
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public int RoundUpPow2Ceiling(int x)
+    private static int RoundUpPow2Ceiling(int x)
     {
         checked
         {
+            if (x == 0) return 8;
             --x;
             x |= x >> 1;
             x |= x >> 2;
@@ -271,10 +268,27 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
         return x;
     }
 
+    /// <inheritdoc />
+    public void Dispose()
+    {
+        if (_disposed) return;
+
+        _disposed = true;
+
+        if (_array != null && _array.Length > 0)
+        {
+            _pool.Return(_array, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+        }
+        _array = null;
+    }
+
+    /// <summary>
+    /// Throws an <see cref="ObjectDisposedException"/> if the writer has been disposed.
+    /// </summary>
     [StackTraceHidden]
-    //[DoesNotReturn]
     private void ThrowIfDisposed()
     {
-        ObjectDisposedException.ThrowIf(_disposed, "The buffer has been disposed.");
+        ObjectDisposedException.ThrowIf(_disposed, this);
     }
 }
+
