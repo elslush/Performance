@@ -118,8 +118,8 @@ public sealed class ResizableByteWriterTests
     public void Write_ReadOnlySpan_And_ReadOnlyMemory()
     {
         using var w = new ResizableByteWriter(initialCapacity: 2);
-        w.Write(new byte[] { 9, 9 }.AsSpan());
-        w.Write(new ReadOnlyMemory<byte>(new byte[] { 1, 2, 3 }));
+        w.Write([9, 9]);
+        w.Write(new ReadOnlyMemory<byte>([1, 2, 3]));
 
         Assert.Equal(new byte[] { 9, 9, 1, 2, 3 }, w.WrittenSpan.ToArray());
     }
@@ -128,8 +128,8 @@ public sealed class ResizableByteWriterTests
     public void Write_Array_Appends()
     {
         using var w = new ResizableByteWriter(initialCapacity: 2);
-        w.Write(new byte[] { 1, 2, 3 });
-        w.Write(new byte[] { 4, 5 });
+        w.Write([1, 2, 3]);
+        w.Write([4, 5]);
 
         Assert.Equal(new byte[] { 1, 2, 3, 4, 5 }, w.WrittenSpan.ToArray());
     }
@@ -176,7 +176,7 @@ public sealed class ResizableByteWriterTests
     public void Reset_SetsIndexToZero_But_Keeps_Capacity()
     {
         using var w = new ResizableByteWriter(initialCapacity: 2);
-        w.Write(new byte[] { 1, 2, 3, 4, 5 });
+        w.Write([1, 2, 3, 4, 5]);
 
         int capBefore = ((IMemoryOwner<byte>)w).Memory.Length;
 
@@ -184,7 +184,7 @@ public sealed class ResizableByteWriterTests
         Assert.Equal(0, w.WrittenSpan.Length);
         Assert.Equal(0, w.Length);
 
-        w.Write(new byte[] { 8, 8, 8, 8 });
+        w.Write([8, 8, 8, 8]);
         Assert.Equal(new byte[] { 8, 8, 8, 8 }, w.WrittenSpan.ToArray());
 
         int capAfter = ((IMemoryOwner<byte>)w).Memory.Length;
@@ -197,7 +197,7 @@ public sealed class ResizableByteWriterTests
     public void WrittenSpan_And_WrittenMemory_Agree()
     {
         using var w = new ResizableByteWriter();
-        w.Write(new byte[] { 10, 11, 12 });
+        w.Write([10, 11, 12]);
 
         var span = w.WrittenSpan;
         var mem = w.WrittenMemory;
@@ -209,7 +209,7 @@ public sealed class ResizableByteWriterTests
     public void IMemoryOwner_Memory_Exposes_Full_Buffer()
     {
         using var w = new ResizableByteWriter(initialCapacity: 8);
-        w.Write(new byte[] { 1, 2, 3 });
+        w.Write([1, 2, 3]);
         var full = ((IMemoryOwner<byte>)w).Memory;
 
         Assert.True(full.Length >= w.WrittenSpan.Length);
@@ -225,7 +225,7 @@ public sealed class ResizableByteWriterTests
         var w = new ResizableByteWriter(pool, initialCapacity: 4);
 
         // cause growth
-        w.Write(new byte[] { 1, 2, 3, 4, 5, 6 });
+        w.Write([1, 2, 3, 4, 5, 6]);
 
         Assert.True(pool.RentedCount >= 1);
         int returnsBefore = pool.ReturnedCount;
@@ -310,8 +310,8 @@ public sealed class ResizableByteWriterTests
     public void Write_Span_Triggers_Growth_And_Preserves_Data()
     {
         using var w = new ResizableByteWriter(initialCapacity: 4);
-        w.Write(new byte[] { 1, 2, 3, 4 });
-        w.Write(new byte[] { 5, 6, 7, 8, 9 });   // triggers EnsureCapacity
+        w.Write([1, 2, 3, 4]);
+        w.Write([5, 6, 7, 8, 9]);   // triggers EnsureCapacity
         Assert.Equal(9, w.Length);
         Assert.Equal(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 }, w.WrittenSpan.ToArray());
     }
@@ -320,13 +320,13 @@ public sealed class ResizableByteWriterTests
     public void Reset_Reuses_Buffer()
     {
         using var w = new ResizableByteWriter(initialCapacity: 2);
-        w.Write(new byte[] { 1, 2, 3, 4, 5 });
+        w.Write([1, 2, 3, 4, 5]);
         int capBefore = ((IMemoryOwner<byte>)w).Memory.Length;
 
         w.Reset();
         Assert.Equal(0, w.Length);
 
-        w.Write(new byte[] { 9, 8, 7 });
+        w.Write([9, 8, 7]);
         Assert.Equal(new byte[] { 9, 8, 7 }, w.WrittenSpan.ToArray());
         int capAfter = ((IMemoryOwner<byte>)w).Memory.Length;
         Assert.Equal(capBefore, capAfter);
@@ -337,7 +337,7 @@ public sealed class ResizableByteWriterTests
     {
         using var w = new ResizableByteWriter();
         var buf = new byte[] { 10, 11, 12 };
-        await w.WriteAsync(buf, 0, buf.Length);
+        await w.WriteAsync(buf, 0, buf.Length, TestContext.Current.CancellationToken);
         Assert.Equal(buf, w.WrittenSpan.ToArray());
     }
 
@@ -345,7 +345,7 @@ public sealed class ResizableByteWriterTests
     public void MemoryOwner_Returns_Full_Buffer()
     {
         using var w = new ResizableByteWriter(initialCapacity: 8);
-        w.Write(new byte[] { 1, 2, 3 });
+        w.Write([1, 2, 3]);
         var mem = ((IMemoryOwner<byte>)w).Memory;
         Assert.True(mem.Length >= 8);
         Assert.True(mem.Length >= w.WrittenSpan.Length);
@@ -359,7 +359,7 @@ public sealed class ResizableByteWriterTests
         var span = writer.GetSpan(16); // Reserve 16 bytes
 
         // Act: Perform a direct write, which should invalidate the reservation.
-        writer.WriteByte((byte)42);
+        writer.WriteByte(42);
 
         // Assert: Advancing the original reservation should now fail.
         var ex = Assert.Throws<InvalidOperationException>(() => writer.Advance(1));
@@ -412,11 +412,11 @@ public sealed class ResizableByteWriterTests
     // Your class has a readonly `_disposed` = false and never sets it to true in Dispose(),
     // so ThrowIfDisposed() will never throw. If you fix that, un-skip this test.
 
-    [Fact(Skip = "Current implementation never sets _disposed=true; post-dispose calls won't throw. Set flag in Dispose() then un-skip.")]
+    [Fact]
     public void After_Dispose_Accessors_Throw()
     {
         var w = new ResizableByteWriter(initialCapacity: 8);
-        w.Write(new byte[] { 1, 2, 3 });
+        w.Write([1, 2, 3]);
         w.Dispose();
 
         Assert.Throws<ObjectDisposedException>(() => _ = w.WrittenSpan);

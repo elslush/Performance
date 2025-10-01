@@ -37,10 +37,10 @@ public sealed class ResizableSpanWriterTests
     public void Write_Array_Appends()
     {
         var w = new ResizableSpanWriter<int>(initialCapacity: 2);
-        w.Write(new[] { 1, 2 });
-        w.Write(new[] { 3, 4, 5 });
+        w.Write([1, 2]);
+        w.Write([3, 4, 5]);
 
-        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, w.WrittenSpan.ToArray());
+        Assert.Equal([1, 2, 3, 4, 5], w.WrittenSpan.ToArray());
     }
 
     // ---------- IBufferWriter flow ----------
@@ -126,7 +126,7 @@ public sealed class ResizableSpanWriterTests
     public void Reset_SetsIndexToZero_ButKeepsCapacity()
     {
         var w = new ResizableSpanWriter<byte>(initialCapacity: 2);
-        w.Write(new byte[] { 1, 2, 3, 4, 5 });
+        w.Write([1, 2, 3, 4, 5]);
 
         int capacityBefore = ((IMemoryOwner<byte>)w).Memory.Length;
 
@@ -134,7 +134,7 @@ public sealed class ResizableSpanWriterTests
         Assert.Equal(0, w.WrittenSpan.Length);
 
         // Write new data; should overwrite from start without reallocating
-        w.Write(new byte[] { 9, 9, 9 });
+        w.Write([9, 9, 9]);
         Assert.Equal(new byte[] { 9, 9, 9 }, w.WrittenSpan.ToArray());
 
         int capacityAfter = ((IMemoryOwner<byte>)w).Memory.Length;
@@ -160,7 +160,7 @@ public sealed class ResizableSpanWriterTests
     public void IMemoryOwner_Memory_IsFullBuffer()
     {
         var w = new ResizableSpanWriter<byte>(initialCapacity: 8);
-        w.Write(new byte[] { 1, 2, 3 });
+        w.Write([1, 2, 3]);
         var full = ((IMemoryOwner<byte>)w).Memory;
 
         // Full buffer should be >= written length (implementation returns whole array)
@@ -175,7 +175,7 @@ public sealed class ResizableSpanWriterTests
     {
         var pool = new TrackingArrayPool<byte>();
         var w = new ResizableSpanWriter<byte>(pool, initialCapacity: 4);
-        w.Write(new byte[] { 1, 2, 3, 4, 5, 6 }); // should grow at least once
+        w.Write([1, 2, 3, 4, 5, 6]); // should grow at least once
 
         Assert.True(pool.RentedCount >= 1);
         int returnsBefore = pool.ReturnedCount;
@@ -202,7 +202,7 @@ public sealed class ResizableSpanWriterTests
         // Assert
         var ex = Assert.Throws<InvalidOperationException>(() => writer.Advance(1));
         Assert.Equal("Cannot advance past the end of the reserved buffer segment.", ex.Message);
-        Assert.Equal(new int[] { 42 }, writer.WrittenSpan.ToArray());
+        Assert.Equal([42], writer.WrittenSpan.ToArray());
     }
 
     [Fact]
@@ -240,7 +240,7 @@ public sealed class ResizableSpanWriterTests
 
     // ---------- Known-issue: disposal guard ----------
 
-    [Fact(Skip = "Current implementation never sets _disposed; post-Dispose APIs should throw ObjectDisposedException but they won't. Consider fixing _disposed.")]
+    [Fact]
     public void AfterDispose_AccessorsThrow_ObjectDisposedException()
     {
         var w = new ResizableSpanWriter<byte>(initialCapacity: 8);
@@ -251,8 +251,8 @@ public sealed class ResizableSpanWriterTests
         Assert.Throws<ObjectDisposedException>(() => _ = ((IMemoryOwner<byte>)w).Memory);
         Assert.Throws<ObjectDisposedException>(() => w.GetSpan());
         Assert.Throws<ObjectDisposedException>(() => w.GetMemory());
-        Assert.Throws<ObjectDisposedException>(() => w.Write((byte)1));
-        Assert.Throws<ObjectDisposedException>(() => w.Write(new byte[] { 9, 9, 9 }));
+        Assert.Throws<ObjectDisposedException>(() => w.Write(1));
+        Assert.Throws<ObjectDisposedException>(() => w.Write([9, 9, 9]));
         Assert.Throws<ObjectDisposedException>(() => w.Reset());
     }
 
