@@ -1,13 +1,37 @@
-﻿using System;
-using System.Buffers;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Buffers;
 using System.Runtime.CompilerServices;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Performance.Enumerators;
 
+/// <summary>
+/// Allocation-free, stack-only enumerator that splits a <see cref="ReadOnlySpan{T}"/>
+/// on **whitespace**, returning contiguous non-whitespace tokens as <see cref="ReadOnlySpan{T}"/> slices.
+/// </summary>
+/// <remarks>
+/// <para>
+/// - **Whitespace definition:** Unicode-correct (<see cref="char.IsWhiteSpace(char)"/>), with an ASCII fast path for
+///   common separators (<c>' '</c>, <c>'\t'</c>, <c>'\r'</c>, <c>'\n'</c>, <c>'\f'</c>).
+/// </para>
+/// <para>
+/// - **No empty tokens:** Consecutive whitespace is coalesced; leading/trailing whitespace is skipped.
+/// </para>
+/// <para>
+/// - **Performance:** O(n). Uses <see cref="MemoryExtensions.IndexOfAny{T}(ReadOnlySpan{T}, SearchValues{T})"/>
+///   for tight ASCII scanning, then falls back to <see cref="char.IsWhiteSpace(char)"/> only when needed.
+/// </para>
+/// <para>
+/// - **ref struct:** Lives on the stack; cannot be boxed, captured, or used across await/yield boundaries.
+/// </para>
+/// </remarks>
+/// <example>
+/// <code>
+/// ReadOnlySpan&lt;char&gt; s = "  foo\tbar\u00A0baz  ".AsSpan(); // includes a non-breaking space
+/// foreach (var token in new WhitespaceSplitEnumerator(s))
+/// {
+///     // tokens: "foo", "bar", "baz"
+/// }
+/// </code>
+/// </example>
 public ref struct WhitespaceSplitEnumerator
 {
     private static readonly SearchValues<char> WsAscii = SearchValues.Create(" \t\r\n\f");
@@ -15,6 +39,7 @@ public ref struct WhitespaceSplitEnumerator
     private readonly ReadOnlySpan<char> _span;
     private int _index;
 
+    /// <summary>Creates an enumerator over <paramref name="span"/> that yields non-whitespace tokens.</summary>
     public WhitespaceSplitEnumerator(ReadOnlySpan<char> span)
     {
         _span = span;
@@ -22,11 +47,16 @@ public ref struct WhitespaceSplitEnumerator
         Current = default;
     }
 
+    /// <summary>The current token produced by the last successful <see cref="MoveNext"/>.</summary>
     public ReadOnlySpan<char> Current { get; private set; }
 
+    /// <summary>Returns the enumerator itself (required for <c>foreach</c> pattern).</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public readonly WhitespaceSplitEnumerator GetEnumerator() => this;
 
+    /// <summary>
+    /// Advances to the next token. Returns <c>true</c> and sets <see cref="Current"/> if a token exists; otherwise <c>false</c>.
+    /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public bool MoveNext()
     {
@@ -113,6 +143,7 @@ public ref struct WhitespaceSplitEnumerator
         return true;
     }
 
+    // Small, branchless-ish helper for ASCII whitespace classification.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsAsciiWs(char c) => c is ' ' or '\t' or '\r' or '\n' or '\f';
 }

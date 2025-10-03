@@ -180,7 +180,7 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     /// <summary>
     /// Appends a single item to the end of the buffer, automatically growing the buffer if necessary.
     /// </summary>
-    /// <param name="item"> Item <see cref="T"/> to append.</param>
+    /// <param name="item">Item to append.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Write(T item)
     {

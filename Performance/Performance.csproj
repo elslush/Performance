@@ -13,6 +13,10 @@
 	<VersionPrefix>1.0.2</VersionPrefix>
   </PropertyGroup>
 
+  <PropertyGroup>
+	<GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
   <ItemGroup>
     <None Include="..\README.md">
       <Pack>True</Pack>
