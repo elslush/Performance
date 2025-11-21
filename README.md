@@ -52,10 +52,10 @@ High-performance trimming extensions for memory and span operations that efficie
 
 Key features:
 - Zero-allocation trimming for byte sequences
-- Efficient handling of common whitespace characters (space, tab, carriage return, line feed)
-- Stack-allocated trim bytes for optimal performance
-- Extension methods for both Memory<byte> and ReadOnlySpan<byte>
-- Support for Trim, TrimStart, and TrimEnd operations
+- Efficient handling of common whitespace characters (space, tab, carriage return, line feed) via `SearchValues`
+- Fast start/end detection without allocating intermediate buffers
+- Extension methods for both Memory<byte> and ReadOnlySpan<byte> plus selective TrimStart support
+- Support for Trim and TrimStart operations
 
 ## Why This Library Is Useful
 
@@ -163,6 +163,22 @@ Memory<byte> memory = new byte[] { 0x20, 0x09, 0x48, 0x65, 0x6C, 0x6C, 0x6F };
 Memory<byte> trimmedMemory = memory.TrimStart();
 Console.WriteLine($"Trimmed start length: {trimmedMemory.Length}");
 ```
+
+## Benchmarks
+
+Run the full benchmark suite (ResizableByteWriter, ResizableSpanWriter, Trimming, WhitespaceSplit) with the BenchmarkSwitcher entrypoint:
+
+```bash
+dotnet run -c Release --project Performance.Benchmarks -- --filter *
+```
+
+To focus on a single area, filter by class or benchmark name, for example the new trimming comparisons:
+
+```bash
+dotnet run -c Release --project Performance.Benchmarks -- --filter *TrimmingBench*
+```
+
+Baselines use the previous implementations (kept in the `Original/` folder) so performance deltas are easy to spot.
 ## Performance Benefits
 
 - **Reduced Allocations**: Buffer pooling minimizes garbage collection pressure

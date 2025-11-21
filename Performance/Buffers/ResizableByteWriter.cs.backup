@@ -20,14 +20,6 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
     /// The <see cref="ArrayPool{T}"/> instance used to rent and return the buffer.
     /// </summary>
     private readonly ArrayPool<byte> _pool;
-    /// <summary>
-    /// Performance optimizations: constant declarations for better JIT optimization
-    /// </summary>
-    private const int DefaultSizeHint = 8;
-    private const int MinimumCapacity = 1;
-    private const int SmallBufferThreshold = 1024;
-
-
 
     /// <summary>
     /// The number of bytes written to the buffer; the current position of the writer.
@@ -174,7 +166,7 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
     /// <inheritdoc />
     public Memory<byte> GetMemory(int sizeHint = 0)
     {
-        if (sizeHint == 0) sizeHint = DefaultSizeHint;
+        if (sizeHint == 0) sizeHint = 8;
         ThrowIfDisposed();
         Grow(sizeHint);
 
@@ -185,7 +177,7 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
     /// <inheritdoc />
     public Span<byte> GetSpan(int sizeHint = 0)
     {
-        if (sizeHint == 0) sizeHint = DefaultSizeHint;
+        if (sizeHint == 0) sizeHint = 8;
         ThrowIfDisposed();
         Grow(sizeHint);
 
@@ -289,17 +281,7 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
         checked
         {
             // Ensure x is not zero, as the algorithm doesn't handle it.
-            if (x <= MinimumCapacity) return MinimumCapacity;
-            if (x <= 2) return 2;
-            if (x <= 4) return 4;
-            if (x <= 8) return 8;
-            if (x <= 16) return 16;
-            if (x <= 32) return 32;
-            if (x <= 64) return 64;
-            if (x <= 128) return 128;
-            if (x <= 256) return 256;
-            if (x <= 512) return 512;
-            if (x <= SmallBufferThreshold) return SmallBufferThreshold; // Return a default small power of two for 0.
+            if (x == 0) return 8; // Return a default small power of two for 0.
             --x;
             x |= x >> 1;
             x |= x >> 2;

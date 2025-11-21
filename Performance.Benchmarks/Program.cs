@@ -1,7 +1,3 @@
-﻿using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Jobs;
-using BenchmarkDotNet.Running;
-using Performance.Benchmarks.Benches;
+﻿using BenchmarkDotNet.Running;
 
-//BenchmarkRunner.Run<WhitespaceSplitBench>();
-BenchmarkRunner.Run<ResizableByteWriterBench>();
+BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);

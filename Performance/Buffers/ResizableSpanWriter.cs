@@ -21,6 +21,14 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     /// The <see cref="ArrayPool{T}"/> instance used to rent and return the buffer.
     /// </summary>
     private readonly ArrayPool<T> _pool;
+    /// <summary>
+    /// Performance optimizations: constant declarations for better JIT optimization
+    /// </summary>
+    private const int DefaultSizeHint = 8;
+    private const int MinimumCapacity = 1;
+    private const int SmallBufferThreshold = 1024;
+
+
 
     /// <summary>
     /// The number of items written to the buffer; the current position of the writer.
@@ -137,7 +145,7 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     /// <inheritdoc />
     public Memory<T> GetMemory(int sizeHint = 0)
     {
-        if (sizeHint == 0) sizeHint = 8;
+        if (sizeHint == 0) sizeHint = DefaultSizeHint;
         ThrowIfDisposed();
         Grow(sizeHint);
 
@@ -148,7 +156,7 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     /// <inheritdoc />
     public Span<T> GetSpan(int sizeHint = 0)
     {
-        if (sizeHint == 0) sizeHint = 8;
+        if (sizeHint == 0) sizeHint = DefaultSizeHint;
         ThrowIfDisposed();
         Grow(sizeHint);
 
@@ -256,7 +264,17 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     {
         checked
         {
-            if (x == 0) return 8;
+            if (x <= MinimumCapacity) return MinimumCapacity;
+            if (x <= 2) return 2;
+            if (x <= 4) return 4;
+            if (x <= 8) return 8;
+            if (x <= 16) return 16;
+            if (x <= 32) return 32;
+            if (x <= 64) return 64;
+            if (x <= 128) return 128;
+            if (x <= 256) return 256;
+            if (x <= 512) return 512;
+            if (x <= SmallBufferThreshold) return SmallBufferThreshold;
             --x;
             x |= x >> 1;
             x |= x >> 2;

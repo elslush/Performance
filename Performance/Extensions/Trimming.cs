@@ -1,9 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Buffers;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using System.Runtime.CompilerServices;
 
 namespace Performance.Extensions;
 
@@ -20,6 +17,13 @@ namespace Performance.Extensions;
 /// </remarks>
 public static class Trimming
 {
+    // Common ASCII whitespace set used by all trim helpers.
+    private static readonly SearchValues<byte> Whitespace = SearchValues.Create(stackalloc byte[] { 0x20, 0x09, 0x0D, 0x0A });
+    private const int DefaultChunkSize = 32;
+    private const int ByteSize = 1;
+    
+
+
     /// <summary>
     /// Trims leading and trailing ASCII whitespace from a <see cref="Memory{T}"/>.
     /// </summary>
@@ -30,14 +34,11 @@ public static class Trimming
     /// </returns>
     public static Memory<byte> Trim(this Memory<byte> memory)
     {
-        if (memory.IsEmpty)
-        {
-            return memory;
-        }
+        if (memory.IsEmpty) return memory;
 
-        Span<byte> trimBytes = stackalloc byte[] { 0x20, 0x09, 0x0D, 0x0A };
-
-        return memory.Trim(trimBytes);
+        var span = memory.Span;
+        var (start, length) = ComputeTrim(span);
+        return memory.Slice(start, length);
     }
 
     /// <summary>
@@ -50,15 +51,9 @@ public static class Trimming
     /// </returns>
     public static ReadOnlySpan<byte> Trim(this ReadOnlySpan<byte> span)
     {
-        if (span.IsEmpty)
-        {
-            return span;
-        }
+        if (span.IsEmpty) return span;
 
-        Span<byte> trimBytes = stackalloc byte[] { 0x20, 0x09, 0x0D, 0x0A };
-
-        int start = ClampStart(span, trimBytes);
-        int length = ClampEnd(span, start, trimBytes);
+        var (start, length) = ComputeTrim(span);
         return span.Slice(start, length);
     }
 
@@ -72,60 +67,40 @@ public static class Trimming
     /// </returns>
     public static ReadOnlySpan<byte> TrimStart(this ReadOnlySpan<byte> span)
     {
-        if (span.IsEmpty)
-        {
-            return span;
-        }
+        if (span.IsEmpty) return span;
 
-        Span<byte> trimBytes = stackalloc byte[] { 0x20, 0x09, 0x0D, 0x0A };
-
-        int start = ClampStart(span, trimBytes);
+        int start = IndexOfFirstNonWhitespace(span);
+        if (start < 0) return ReadOnlySpan<byte>.Empty; // all whitespace
         return span[start..];
     }
 
-    /// <summary>
-    /// Scans from the left until finding the first element not contained in <paramref name="trimElements"/>.
-    /// </summary>
-    /// <typeparam name="T">Element type, compared via <see cref="IEquatable{T}"/>.</typeparam>
-    /// <param name="span">The span to scan.</param>
-    /// <param name="trimElements">Set of elements to trim.</param>
-    /// <returns>Index of first non-trim element; equals <c>span.Length</c> if all trimmed.</returns>
-    private static int ClampStart<T>(ReadOnlySpan<T> span, ReadOnlySpan<T> trimElements) where T : IEquatable<T>?
+    // Compute start index and length of the trimmed slice.
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static (int start, int length) ComputeTrim(ReadOnlySpan<byte> span)
     {
-        int start = 0;
-        for (; start < span.Length; start++)
-        {
-            if (!trimElements.Contains(span[start]))
-            {
-                break;
-            }
-        }
+        int start = IndexOfFirstNonWhitespace(span);
+        if (start < 0) return (0, 0);              // all whitespace
 
-        return start;
+        int end = LastIndexOfNonWhitespace(span);
+        return (start, end - start + 1);
     }
 
-    /// <summary>
-    /// Scans from the right to compute the length of the slice after trimming, given a left bound.
-    /// </summary>
-    /// <typeparam name="T">Element type, compared via <see cref="System.IEquatable{T}"/>.</typeparam>
-    /// <param name="span">The span to scan.</param>
-    /// <param name="start">The leftmost kept index (from <see cref="ClampStart{T}(System.ReadOnlySpan{T}, System.ReadOnlySpan{T})"/>).</param>
-    /// <param name="trimElements">Set of elements to trim.</param>
-    /// <returns>The length of the kept slice (may be 0).</returns>
-    private static int ClampEnd<T>(ReadOnlySpan<T> span, int start, ReadOnlySpan<T> trimElements) where T : IEquatable<T>?
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int IndexOfFirstNonWhitespace(ReadOnlySpan<byte> span)
     {
-        // Initially, start==len==0. If ClampStart trims all, start==len
-        Debug.Assert((uint)start <= span.Length);
+        int idx = span.IndexOfAnyExcept(Whitespace);
+        return idx; // returns -1 if all bytes are in the whitespace set
+    }
 
-        int end = span.Length - 1;
-        for (; end >= start; end--)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int LastIndexOfNonWhitespace(ReadOnlySpan<byte> span)
+    {
+        // Optimized search from end using bounds checking
+        for (int i = span.Length - 1; i >= 0; i--)
         {
-            if (!trimElements.Contains(span[end]))
-            {
-                break;
-            }
+            if (!Whitespace.Contains(span[i]))
+                return i;
         }
-
-        return end - start + 1;
+        return -1;
     }
 }

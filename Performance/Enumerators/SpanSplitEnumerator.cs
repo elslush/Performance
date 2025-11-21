@@ -48,6 +48,11 @@ public ref struct SpanSplitEnumerator<T> where T : IEquatable<T>
     private readonly ReadOnlySpan<T> _span;
     private readonly T _separator;
     private int _currentIndex;
+    private const int NoMatchFound = -1;
+    private const int FirstElement = 0;
+    private const int LastElement = -1;
+
+
 
     /// <summary>
     /// Initializes a new enumerator over <paramref name="span"/> splitting by <paramref name="separator"/>.
@@ -79,15 +84,16 @@ public ref struct SpanSplitEnumerator<T> where T : IEquatable<T>
         if (_currentIndex > _span.Length)
             return false;
 
-        int index = _span[_currentIndex..].IndexOf(_separator);
-        if (index == -1)
+        var remainingSpan = _span[_currentIndex..];
+        int index = remainingSpan.IndexOf(_separator);
+        if (index == NoMatchFound)
         {
-            Current = _span[_currentIndex..];
+            Current = remainingSpan;
             _currentIndex = _span.Length + 1; // Move past the end
             return true;
         }
 
-        Current = _span.Slice(_currentIndex, index);
+        Current = remainingSpan.Slice(FirstElement, index);
         _currentIndex += index + 1;
         return true;
     }
