@@ -1,5 +1,6 @@
 ﻿using System.Buffers;
 using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace Performance.Buffers;
@@ -24,8 +25,6 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
     /// Performance optimizations: constant declarations for better JIT optimization
     /// </summary>
     private const int DefaultSizeHint = 8;
-    private const int MinimumCapacity = 1;
-    private const int SmallBufferThreshold = 1024;
 
 
 
@@ -229,8 +228,6 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Copy(ReadOnlySpan<byte> items)
     {
-        if (items.IsEmpty) return;
-        _available = 0; // Direct writes invalidate any outstanding reservation.
         Grow(items.Length);
         items.CopyTo(new Span<byte>(_array, _index, items.Length));
         _index += items.Length;
@@ -244,71 +241,18 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
     private void Grow(int size)
     {
         ThrowIfDisposed();
-        if (!GrowIfRequired(size, out var newSize)) return;
+        var newIndex = checked(_index + size);
+        if (_array is not null && newIndex <= _array.Length) return;
 
+        var newSize = (int)BitOperations.RoundUpToPowerOf2((uint)newIndex);
         var newBuffer = _pool.Rent(newSize);
-        if (_index > 0)
-        {
-            var source = new ReadOnlySpan<byte>(_array, 0, _index);
-            source.CopyTo(newBuffer);
-        }
+        var src = new Span<byte>(_array, 0, _index);
+        src.CopyTo(newBuffer);
 
-        if (_array is not null && _array.Length > 0)
-        {
+        if (_array is not null)
             _pool.Return(_array);
-        }
 
         _array = newBuffer;
-    }
-
-    /// <summary>
-    /// Determines if the buffer needs to grow and calculates the required new size.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool GrowIfRequired(int size, out int length)
-    {
-        length = default;
-        var newIndex = checked((long)_index + size);
-
-        if (_array is not null && newIndex <= _array.Length)
-        {
-            return false;
-        }
-
-        length = RoundUpPow2Ceiling((int)newIndex);
-        return true;
-    }
-
-    /// <summary>
-    /// Calculates the next power of two greater than or equal to the input value.
-    /// This is an efficient bit-twiddling algorithm for resizing buffers.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int RoundUpPow2Ceiling(int x)
-    {
-        checked
-        {
-            // Ensure x is not zero, as the algorithm doesn't handle it.
-            if (x <= MinimumCapacity) return MinimumCapacity;
-            if (x <= 2) return 2;
-            if (x <= 4) return 4;
-            if (x <= 8) return 8;
-            if (x <= 16) return 16;
-            if (x <= 32) return 32;
-            if (x <= 64) return 64;
-            if (x <= 128) return 128;
-            if (x <= 256) return 256;
-            if (x <= 512) return 512;
-            if (x <= SmallBufferThreshold) return SmallBufferThreshold; // Return a default small power of two for 0.
-            --x;
-            x |= x >> 1;
-            x |= x >> 2;
-            x |= x >> 4;
-            x |= x >> 8;
-            x |= x >> 16;
-            ++x;
-        }
-        return x;
     }
 
     /// <inheritdoc />

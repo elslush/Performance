@@ -1,9 +1,14 @@
-﻿using Performance.Enumerators;
-using System;
+﻿using System;
+using System.Buffers;
 using System.Collections.Generic;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 
+using Performance.Enumerators;
+
 namespace Performance.Tests;
+
 
 public sealed class WhitespaceSplitEnumeratorTests
 {
@@ -141,4 +146,398 @@ public sealed class WhitespaceSplitEnumeratorTests
         for (int i = 0; i < expected.Count; i++)
             Assert.Equal(expected[i], actual[i]);
     }
+
+    /// <summary>
+    /// Verifies that the constructor initializes Current to an empty span (default)
+    /// when provided with an empty input span.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithEmptySpan_InitializesCurrentToEmpty()
+    {
+        // Arrange
+        ReadOnlySpan<char> emptySpan = ReadOnlySpan<char>.Empty;
+
+        // Act
+        var enumerator = new WhitespaceSplitEnumerator(emptySpan);
+
+        // Assert
+        Assert.True(enumerator.Current.IsEmpty);
+        Assert.Equal(0, enumerator.Current.Length);
+    }
+
+    /// <summary>
+    /// Verifies that the constructor initializes Current to an empty span (default)
+    /// when provided with a non-empty input span, before MoveNext is called.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithNonEmptySpan_InitializesCurrentToEmpty()
+    {
+        // Arrange
+        ReadOnlySpan<char> span = "hello world".AsSpan();
+
+        // Act
+        var enumerator = new WhitespaceSplitEnumerator(span);
+
+        // Assert
+        Assert.True(enumerator.Current.IsEmpty);
+        Assert.Equal(0, enumerator.Current.Length);
+    }
+
+    /// <summary>
+    /// Verifies that the constructor initializes Current to an empty span (default)
+    /// when provided with a whitespace-only input span.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithWhitespaceOnlySpan_InitializesCurrentToEmpty()
+    {
+        // Arrange
+        ReadOnlySpan<char> whitespaceSpan = "   \t\r\n\f   ".AsSpan();
+
+        // Act
+        var enumerator = new WhitespaceSplitEnumerator(whitespaceSpan);
+
+        // Assert
+        Assert.True(enumerator.Current.IsEmpty);
+        Assert.Equal(0, enumerator.Current.Length);
+    }
+
+    /// <summary>
+    /// Verifies that the constructor initializes Current to an empty span (default)
+    /// when provided with a span containing Unicode whitespace characters.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithUnicodeWhitespace_InitializesCurrentToEmpty()
+    {
+        // Arrange
+        ReadOnlySpan<char> unicodeSpan = "\u00A0\u2003\u202F\u3000".AsSpan(); // NBSP, EM SPACE, NNBSP, IDEOGRAPHIC SPACE
+
+        // Act
+        var enumerator = new WhitespaceSplitEnumerator(unicodeSpan);
+
+        // Assert
+        Assert.True(enumerator.Current.IsEmpty);
+        Assert.Equal(0, enumerator.Current.Length);
+    }
+
+    /// <summary>
+    /// Verifies that the constructor initializes Current to an empty span (default)
+    /// when provided with a single character span.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithSingleCharacter_InitializesCurrentToEmpty()
+    {
+        // Arrange
+        ReadOnlySpan<char> singleChar = "x".AsSpan();
+
+        // Act
+        var enumerator = new WhitespaceSplitEnumerator(singleChar);
+
+        // Assert
+        Assert.True(enumerator.Current.IsEmpty);
+        Assert.Equal(0, enumerator.Current.Length);
+    }
+
+    /// <summary>
+    /// Verifies that the constructor initializes Current to an empty span (default)
+    /// when provided with a large input span.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithLargeSpan_InitializesCurrentToEmpty()
+    {
+        // Arrange
+        string largeString = new string('a', 10000);
+        ReadOnlySpan<char> largeSpan = largeString.AsSpan();
+
+        // Act
+        var enumerator = new WhitespaceSplitEnumerator(largeSpan);
+
+        // Assert
+        Assert.True(enumerator.Current.IsEmpty);
+        Assert.Equal(0, enumerator.Current.Length);
+    }
+
+    /// <summary>
+    /// Verifies that the constructor initializes Current to an empty span (default)
+    /// when provided with a span containing special and control characters.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithSpecialCharacters_InitializesCurrentToEmpty()
+    {
+        // Arrange
+        ReadOnlySpan<char> specialChars = "test\0\u0001\u001F\uFFFF".AsSpan();
+
+        // Act
+        var enumerator = new WhitespaceSplitEnumerator(specialChars);
+
+        // Assert
+        Assert.True(enumerator.Current.IsEmpty);
+        Assert.Equal(0, enumerator.Current.Length);
+    }
+
+    /// <summary>
+    /// Verifies that the constructor properly initializes the enumerator
+    /// and allows GetEnumerator to be called, returning itself.
+    /// </summary>
+    [Fact]
+    public void Constructor_GetEnumerator_ReturnsSelf()
+    {
+        // Arrange
+        ReadOnlySpan<char> span = "test".AsSpan();
+        var enumerator = new WhitespaceSplitEnumerator(span);
+
+        // Act
+        var result = enumerator.GetEnumerator();
+
+        // Assert - verifying that GetEnumerator works after construction
+        Assert.True(result.Current.IsEmpty);
+    }
+
+    /// <summary>
+    /// Verifies that the constructor properly initializes the enumerator
+    /// to a state where MoveNext can be called without throwing exceptions.
+    /// </summary>
+    [Fact]
+    public void Constructor_AllowsMoveNextCall_WithoutException()
+    {
+        // Arrange
+        ReadOnlySpan<char> span = "token".AsSpan();
+
+        // Act
+        var enumerator = new WhitespaceSplitEnumerator(span);
+        var canMove = enumerator.MoveNext();
+
+        // Assert - verifying that MoveNext works after construction
+        Assert.True(canMove);
+        Assert.False(enumerator.Current.IsEmpty);
+    }
+
+    /// <summary>
+    /// Verifies that the constructor properly initializes the enumerator
+    /// with a span containing mixed ASCII and Unicode content.
+    /// </summary>
+    [Fact]
+    public void Constructor_WithMixedAsciiUnicode_InitializesCurrentToEmpty()
+    {
+        // Arrange
+        ReadOnlySpan<char> mixedSpan = "hello\u00A0world\u2003test".AsSpan();
+
+        // Act
+        var enumerator = new WhitespaceSplitEnumerator(mixedSpan);
+
+        // Assert
+        Assert.True(enumerator.Current.IsEmpty);
+        Assert.Equal(0, enumerator.Current.Length);
+    }
+
+    /// <summary>
+    /// Tests that GetEnumerator returns a usable enumerator when called on a fresh instance.
+    /// Verifies the enumerator can be explicitly obtained and iterated to produce expected tokens.
+    /// </summary>
+    [Fact]
+    public void GetEnumerator_OnFreshEnumerator_ReturnsUsableEnumerator()
+    {
+        // Arrange
+        var span = "one two three".AsSpan();
+        var enumerator = new WhitespaceSplitEnumerator(span);
+
+        // Act
+        var result = enumerator.GetEnumerator();
+        var tokens = new List<string>();
+        while (result.MoveNext())
+        {
+            tokens.Add(result.Current.ToString());
+        }
+
+        // Assert
+        Assert.Equal(3, tokens.Count);
+        Assert.Equal("one", tokens[0]);
+        Assert.Equal("two", tokens[1]);
+        Assert.Equal("three", tokens[2]);
+    }
+
+    /// <summary>
+    /// Tests that GetEnumerator returns a working enumerator for an empty span.
+    /// Verifies that no tokens are produced when the input is empty.
+    /// </summary>
+    [Fact]
+    public void GetEnumerator_OnEmptySpan_ReturnsEnumeratorWithNoTokens()
+    {
+        // Arrange
+        var span = ReadOnlySpan<char>.Empty;
+        var enumerator = new WhitespaceSplitEnumerator(span);
+
+        // Act
+        var result = enumerator.GetEnumerator();
+        var tokens = new List<string>();
+        while (result.MoveNext())
+        {
+            tokens.Add(result.Current.ToString());
+        }
+
+        // Assert
+        Assert.Empty(tokens);
+    }
+
+    /// <summary>
+    /// Tests that GetEnumerator returns a working enumerator for whitespace-only input.
+    /// Verifies that no tokens are produced when the input contains only whitespace characters.
+    /// </summary>
+    [Fact]
+    public void GetEnumerator_OnWhitespaceOnlySpan_ReturnsEnumeratorWithNoTokens()
+    {
+        // Arrange
+        var span = "   \t\r\n  ".AsSpan();
+        var enumerator = new WhitespaceSplitEnumerator(span);
+
+        // Act
+        var result = enumerator.GetEnumerator();
+        var tokens = new List<string>();
+        while (result.MoveNext())
+        {
+            tokens.Add(result.Current.ToString());
+        }
+
+        // Assert
+        Assert.Empty(tokens);
+    }
+
+    /// <summary>
+    /// Tests that multiple calls to GetEnumerator return independent enumerator copies.
+    /// Since WhitespaceSplitEnumerator is a value type, each call should return an independent copy
+    /// that can be iterated separately without affecting other copies.
+    /// </summary>
+    [Fact]
+    public void GetEnumerator_MultipleCalls_ReturnsIndependentCopies()
+    {
+        // Arrange
+        var span = "alpha beta gamma".AsSpan();
+        var enumerator = new WhitespaceSplitEnumerator(span);
+
+        // Act
+        var enumerator1 = enumerator.GetEnumerator();
+        var enumerator2 = enumerator.GetEnumerator();
+
+        var tokens1 = new List<string>();
+        while (enumerator1.MoveNext())
+        {
+            tokens1.Add(enumerator1.Current.ToString());
+        }
+
+        var tokens2 = new List<string>();
+        while (enumerator2.MoveNext())
+        {
+            tokens2.Add(enumerator2.Current.ToString());
+        }
+
+        // Assert
+        Assert.Equal(3, tokens1.Count);
+        Assert.Equal(3, tokens2.Count);
+        Assert.Equal("alpha", tokens1[0]);
+        Assert.Equal("alpha", tokens2[0]);
+        Assert.Equal("beta", tokens1[1]);
+        Assert.Equal("beta", tokens2[1]);
+        Assert.Equal("gamma", tokens1[2]);
+        Assert.Equal("gamma", tokens2[2]);
+    }
+
+    /// <summary>
+    /// Tests that GetEnumerator works correctly with Unicode whitespace characters.
+    /// Verifies the enumerator properly handles non-ASCII whitespace like NBSP, EM SPACE, etc.
+    /// </summary>
+    [Fact]
+    public void GetEnumerator_WithUnicodeWhitespace_ReturnsCorrectTokens()
+    {
+        // Arrange
+        var span = "\u00A0foo\u2003bar\u202Fbaz\u3000".AsSpan(); // NBSP, EM SPACE, NNBSP, IDEOGRAPHIC SPACE
+        var enumerator = new WhitespaceSplitEnumerator(span);
+
+        // Act
+        var result = enumerator.GetEnumerator();
+        var tokens = new List<string>();
+        while (result.MoveNext())
+        {
+            tokens.Add(result.Current.ToString());
+        }
+
+        // Assert
+        Assert.Equal(3, tokens.Count);
+        Assert.Equal("foo", tokens[0]);
+        Assert.Equal("bar", tokens[1]);
+        Assert.Equal("baz", tokens[2]);
+    }
+
+    /// <summary>
+    /// Tests that GetEnumerator works with a span containing a single token with no whitespace.
+    /// Verifies that the enumerator returns the entire span as one token.
+    /// </summary>
+    [Fact]
+    public void GetEnumerator_WithSingleTokenNoWhitespace_ReturnsSingleToken()
+    {
+        // Arrange
+        var span = "singletoken".AsSpan();
+        var enumerator = new WhitespaceSplitEnumerator(span);
+
+        // Act
+        var result = enumerator.GetEnumerator();
+        var tokens = new List<string>();
+        while (result.MoveNext())
+        {
+            tokens.Add(result.Current.ToString());
+        }
+
+        // Assert
+        Assert.Single(tokens);
+        Assert.Equal("singletoken", tokens[0]);
+    }
+
+    /// <summary>
+    /// Tests that GetEnumerator works with consecutive whitespace characters.
+    /// Verifies that consecutive whitespace is treated as a single delimiter and no empty tokens are produced.
+    /// </summary>
+    [Fact]
+    public void GetEnumerator_WithConsecutiveWhitespace_ProducesCorrectTokens()
+    {
+        // Arrange
+        var span = "one     two\t\t\tthree".AsSpan();
+        var enumerator = new WhitespaceSplitEnumerator(span);
+
+        // Act
+        var result = enumerator.GetEnumerator();
+        var tokens = new List<string>();
+        while (result.MoveNext())
+        {
+            tokens.Add(result.Current.ToString());
+        }
+
+        // Assert
+        Assert.Equal(3, tokens.Count);
+        Assert.Equal("one", tokens[0]);
+        Assert.Equal("two", tokens[1]);
+        Assert.Equal("three", tokens[2]);
+    }
+
+    /// <summary>
+    /// Tests that GetEnumerator works with leading and trailing whitespace.
+    /// Verifies that leading and trailing whitespace is properly skipped and does not produce empty tokens.
+    /// </summary>
+    [Fact]
+    public void GetEnumerator_WithLeadingAndTrailingWhitespace_SkipsWhitespace()
+    {
+        // Arrange
+        var span = "   \t\r\ntoken\n\r\t   ".AsSpan();
+        var enumerator = new WhitespaceSplitEnumerator(span);
+
+        // Act
+        var result = enumerator.GetEnumerator();
+        var tokens = new List<string>();
+        while (result.MoveNext())
+        {
+            tokens.Add(result.Current.ToString());
+        }
+
+        // Assert
+        Assert.Single(tokens);
+        Assert.Equal("token", tokens[0]);
+    }
 }
+

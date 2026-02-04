@@ -1,4 +1,5 @@
 <Solution>
+  <Project Path="Performance.Benchmarks.UnitTests/Performance.Benchmarks.UnitTests.csproj" Id="7a542d9c-ba29-4dcb-86be-8343597141cc" />
   <Project Path="Performance.Benchmarks/Performance.Benchmarks.csproj" />
   <Project Path="Performance.Tests/Performance.Tests.csproj" />
   <Project Path="Performance/Performance.csproj" />
