@@ -245,7 +245,12 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     private bool GrowIfRequired(int size, out int length)
     {
         length = default;
-        var newIndex = checked((long)_index + size);
+        var newIndex = checked(_index + size); // Use int for performance, allow overflow exception
+
+        // Optimized check: Use subtraction to avoid bounds check elimination issues?
+        // Original code used: if (_array!.Length - newIndex >= 0) return false;
+        // My check: if (_array is not null && newIndex <= _array.Length) return false;
+        // Let's stick to the safe, standard pattern but remove the long cast.
 
         if (_array is not null && newIndex <= _array.Length)
         {
@@ -255,15 +260,10 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
         var nextPow2 = BitOperations.RoundUpToPowerOf2((uint)newIndex);
         if (nextPow2 > int.MaxValue)
         {
-            // Fallback for extremely large sizes, though ArrayPool might not support it.
-            // But let's respect int limits.
             throw new OutOfMemoryException($"Required buffer size {nextPow2} exceeds maximum array length.");
         }
         length = (int)nextPow2;
 
-        // Apply SmallBufferThreshold optimization if needed?
-        // The original code clamped <= SmallBufferThreshold to SmallBufferThreshold (1024).
-        // If x <= 1024, return 1024.
         if (length < SmallBufferThreshold) length = SmallBufferThreshold;
 
         return true;
