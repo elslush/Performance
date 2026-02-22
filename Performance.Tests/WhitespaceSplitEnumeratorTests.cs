@@ -30,6 +30,14 @@ public sealed class WhitespaceSplitEnumeratorTests
     }
 
     [Fact]
+    public void VerticalTab_Is_Whitespace()
+    {
+        // Regression test for infinite loop bug with \v
+        EqualSeq(new[] { "one", "two" }, Tokens("one\vtwo"));
+        EqualSeq(new[] { "one" }, Tokens("\v\vone\v\v"));
+    }
+
+    [Fact]
     public void Unicode_Whitespace_Simple()
     {
         var input = "\u00A0alpha\u2003beta\u202Fgamma\u3000delta"; // NBSP, EM SPACE, NNBSP, IDEOGRAPHIC SPACE

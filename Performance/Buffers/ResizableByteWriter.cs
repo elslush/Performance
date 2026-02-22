@@ -74,7 +74,14 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
     public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
 
     /// <inheritdoc />
-    public override long Length => _index;
+    public override long Length
+    {
+        get
+        {
+            ThrowIfDisposed();
+            return _index;
+        }
+    }
 
     /// <inheritdoc />
     public override bool CanRead => false;
@@ -163,7 +170,7 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
         ArgumentOutOfRangeException.ThrowIfNegative(count);
         ThrowIfDisposed();
 
-        if (count > _available)
+        if (count > _available || _available == 0)
             throw new InvalidOperationException("Cannot advance past the end of the reserved buffer segment.");
 
         _index += count;
@@ -228,6 +235,7 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Copy(ReadOnlySpan<byte> items)
     {
+        _available = 0; // Direct writes invalidate any outstanding reservation.
         Grow(items.Length);
         items.CopyTo(new Span<byte>(_array, _index, items.Length));
         _index += items.Length;
@@ -249,7 +257,7 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
         var src = new Span<byte>(_array, 0, _index);
         src.CopyTo(newBuffer);
 
-        if (_array is not null)
+        if (_array is not null && _array.Length > 0)
             _pool.Return(_array);
 
         _array = newBuffer;
