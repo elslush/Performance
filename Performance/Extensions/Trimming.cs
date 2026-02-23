@@ -7,10 +7,10 @@ namespace Performance.Extensions;
 /// <summary>
 /// Trimming helpers for <see cref="Memory{T}"/> and
 /// <see cref="ReadOnlySpan{T}"/> that remove leading/trailing ASCII
-/// whitespace bytes (space, tab, CR, LF) without allocations.
+/// whitespace bytes (space, tab, CR, LF, VT, FF) without allocations.
 /// </summary>
 /// <remarks>
-/// - Default trim set is ASCII: 0x20 (space), 0x09 (tab), 0x0D (CR), 0x0A (LF).  
+/// - Default trim set is ASCII: 0x20 (space), 0x09 (tab), 0x0D (CR), 0x0A (LF), 0x0B (VT), 0x0C (FF).
 /// - Span-based overloads return slices into the original buffer (no copying).  
 /// - The <see cref="Memory{T}"/> overload delegates to a
 ///   byte-set overload (expected to exist elsewhere) to avoid duplicating logic.
@@ -18,7 +18,7 @@ namespace Performance.Extensions;
 public static class Trimming
 {
     // Common ASCII whitespace set used by all trim helpers.
-    private static readonly SearchValues<byte> Whitespace = SearchValues.Create(stackalloc byte[] { 0x20, 0x09, 0x0D, 0x0A });
+    private static readonly SearchValues<byte> Whitespace = SearchValues.Create(stackalloc byte[] { 0x20, 0x09, 0x0D, 0x0A, 0x0B, 0x0C });
     private const int DefaultChunkSize = 32;
     private const int ByteSize = 1;
     
@@ -95,12 +95,6 @@ public static class Trimming
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int LastIndexOfNonWhitespace(ReadOnlySpan<byte> span)
     {
-        // Optimized search from end using bounds checking
-        for (int i = span.Length - 1; i >= 0; i--)
-        {
-            if (!Whitespace.Contains(span[i]))
-                return i;
-        }
-        return -1;
+        return span.LastIndexOfAnyExcept(Whitespace);
     }
 }

@@ -380,6 +380,24 @@ public sealed class ResizableByteWriterTests
     }
 
     [Fact]
+    public void ByteWriter_WriteArray_Invalidates_GetSpanReservation()
+    {
+        // Arrange
+        using var writer = new ResizableByteWriter();
+        var span = writer.GetSpan(16); // Reserve 16 bytes
+
+        // Act: Perform a write, which should invalidate the reservation.
+        writer.Write(new byte[] { 42 });
+
+        // Assert: Advancing the original reservation should now fail.
+        var ex = Assert.Throws<InvalidOperationException>(() => writer.Advance(1));
+        Assert.Equal("Cannot advance past the end of the reserved buffer segment.", ex.Message);
+
+        // The writer's content should only contain the written byte.
+        Assert.Equal(new byte[] { 42 }, writer.WrittenSpan.ToArray());
+    }
+
+    [Fact]
     public void ByteWriter_Reset_Clears_GetSpanReservation()
     {
         // Arrange
@@ -1904,8 +1922,7 @@ public sealed class ResizableByteWriterTests
     /// Verifies that even zero advance requires a valid reservation.
     /// Expected: InvalidOperationException due to no available space.
     /// </summary>
-    [Fact(Skip="ProductionBugSuspected")]
-    [Trait("Category", "ProductionBugSuspected")]
+    [Fact]
     public void Advance_ZeroCountWithZeroReservation_ThrowsInvalidOperationException()
     {
         // Arrange
@@ -3444,8 +3461,7 @@ public sealed class ResizableByteWriterTests
     /// Verifies that accessing the Length property after disposal
     /// throws an ObjectDisposedException.
     /// </summary>
-    [Fact(Skip="ProductionBugSuspected")]
-    [Trait("Category", "ProductionBugSuspected")]
+    [Fact]
     public void Length_AfterDispose_ThrowsObjectDisposedException()
     {
         // Arrange

@@ -34,7 +34,8 @@ namespace Performance.Enumerators;
 /// </example>
 public ref struct WhitespaceSplitEnumerator
 {
-    private static readonly SearchValues<char> WsAscii = SearchValues.Create(" \t\r\n\f");
+    // Includes VT (0x0B) to match IsAsciiWs and avoid infinite loop on vertical tabs
+    private static readonly SearchValues<char> WsAscii = SearchValues.Create(" \t\r\n\f\v");
 
     private readonly ReadOnlySpan<char> _span;
     private int _index;
@@ -145,5 +146,5 @@ public ref struct WhitespaceSplitEnumerator
 
     // Small, branchless-ish helper for ASCII whitespace classification.
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static bool IsAsciiWs(char c) => c is ' ' or '\t' or '\r' or '\n' or '\f';
+    private static bool IsAsciiWs(char c) => c is ' ' or '\t' or '\r' or '\n' or '\f' or '\v';
 }

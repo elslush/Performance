@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Buffers;
 using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 
 namespace Performance.Buffers;
@@ -244,46 +245,28 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     private bool GrowIfRequired(int size, out int length)
     {
         length = default;
-        var newIndex = checked((long)_index + size);
+        var newIndex = checked(_index + size); // Use int for performance, allow overflow exception
+
+        // Optimized check: Use subtraction to avoid bounds check elimination issues?
+        // Original code used: if (_array!.Length - newIndex >= 0) return false;
+        // My check: if (_array is not null && newIndex <= _array.Length) return false;
+        // Let's stick to the safe, standard pattern but remove the long cast.
 
         if (_array is not null && newIndex <= _array.Length)
         {
             return false;
         }
 
-        length = RoundUpPow2Ceiling((int)newIndex);
-        return true;
-    }
-
-    /// <summary>
-    /// Calculates the next power of two greater than or equal to the input value.
-    /// This is an efficient bit-twiddling algorithm for resizing buffers.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int RoundUpPow2Ceiling(int x)
-    {
-        checked
+        var nextPow2 = BitOperations.RoundUpToPowerOf2((uint)newIndex);
+        if (nextPow2 > int.MaxValue)
         {
-            if (x <= MinimumCapacity) return MinimumCapacity;
-            if (x <= 2) return 2;
-            if (x <= 4) return 4;
-            if (x <= 8) return 8;
-            if (x <= 16) return 16;
-            if (x <= 32) return 32;
-            if (x <= 64) return 64;
-            if (x <= 128) return 128;
-            if (x <= 256) return 256;
-            if (x <= 512) return 512;
-            if (x <= SmallBufferThreshold) return SmallBufferThreshold;
-            --x;
-            x |= x >> 1;
-            x |= x >> 2;
-            x |= x >> 4;
-            x |= x >> 8;
-            x |= x >> 16;
-            ++x;
+            throw new OutOfMemoryException($"Required buffer size {nextPow2} exceeds maximum array length.");
         }
-        return x;
+        length = (int)nextPow2;
+
+        if (length < SmallBufferThreshold) length = SmallBufferThreshold;
+
+        return true;
     }
 
     /// <inheritdoc />

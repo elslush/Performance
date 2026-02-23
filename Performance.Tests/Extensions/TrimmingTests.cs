@@ -38,10 +38,12 @@ public partial class TrimmingTests
     [InlineData(new byte[] { 0x09 })]                           // Single tab
     [InlineData(new byte[] { 0x0D })]                           // Single CR
     [InlineData(new byte[] { 0x0A })]                           // Single LF
+    [InlineData(new byte[] { 0x0B })]                           // Single VT
+    [InlineData(new byte[] { 0x0C })]                           // Single FF
     [InlineData(new byte[] { 0x20, 0x20, 0x20 })]              // Multiple spaces
     [InlineData(new byte[] { 0x09, 0x09 })]                     // Multiple tabs
     [InlineData(new byte[] { 0x0D, 0x0A })]                     // CR+LF
-    [InlineData(new byte[] { 0x20, 0x09, 0x0D, 0x0A })]        // All whitespace types
+    [InlineData(new byte[] { 0x20, 0x09, 0x0D, 0x0A, 0x0B, 0x0C })]        // All whitespace types
     [InlineData(new byte[] { 0x20, 0x09, 0x20, 0x0A, 0x0D, 0x09 })] // Mixed whitespace
     public void Trim_AllWhitespace_ReturnsZeroLengthSlice(byte[] bytes)
     {
@@ -301,9 +303,11 @@ public partial class TrimmingTests
     [InlineData(new byte[] { 0x09 })] // Single tab
     [InlineData(new byte[] { 0x0D })] // Single CR
     [InlineData(new byte[] { 0x0A })] // Single LF
+    [InlineData(new byte[] { 0x0B })] // Single VT
+    [InlineData(new byte[] { 0x0C })] // Single FF
     [InlineData(new byte[] { 0x20, 0x20 })] // Multiple spaces
     [InlineData(new byte[] { 0x09, 0x09, 0x09 })] // Multiple tabs
-    [InlineData(new byte[] { 0x20, 0x09, 0x0D, 0x0A })] // Mixed whitespace
+    [InlineData(new byte[] { 0x20, 0x09, 0x0D, 0x0A, 0x0B, 0x0C })] // Mixed whitespace
     [InlineData(new byte[] { 0x0A, 0x0D, 0x09, 0x20 })] // Mixed whitespace reversed
     [InlineData(new byte[] { 0x20, 0x20, 0x09, 0x09, 0x0D, 0x0D, 0x0A, 0x0A })] // Many mixed
     public void TrimStart_AllWhitespace_ReturnsEmptySpan(byte[] whitespaceBytes)
@@ -452,8 +456,6 @@ public partial class TrimmingTests
     [InlineData(new byte[] { 0x00 })] // Null
     [InlineData(new byte[] { 0x01 })] // SOH
     [InlineData(new byte[] { 0x08 })] // Backspace
-    [InlineData(new byte[] { 0x0B })] // Vertical tab
-    [InlineData(new byte[] { 0x0C })] // Form feed
     [InlineData(new byte[] { 0x1F })] // Unit separator
     public void TrimStart_NonWhitespaceControlCharacters_ReturnsOriginalSpan(byte[] input)
     {
