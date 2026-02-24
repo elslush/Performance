@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Performance.Enumerators;
 
@@ -50,7 +46,6 @@ public ref struct SpanSplitEnumerator<T> where T : IEquatable<T>
     private int _currentIndex;
     private const int NoMatchFound = -1;
     private const int FirstElement = 0;
-    private const int LastElement = -1;
 
 
 

@@ -23,13 +23,9 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     /// </summary>
     private readonly ArrayPool<T> _pool;
     /// <summary>
-    /// Performance optimizations: constant declarations for better JIT optimization
+    /// Default minimum reservation when callers request size hint 0.
     /// </summary>
     private const int DefaultSizeHint = 8;
-    private const int MinimumCapacity = 1;
-    private const int SmallBufferThreshold = 1024;
-
-
 
     /// <summary>
     /// The number of items written to the buffer; the current position of the writer.
@@ -37,15 +33,9 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     private int _index;
 
     /// <summary>
-    /// The number of items reserved by the last call to GetSpan or GetMemory.
-    /// This is used to validate the count passed to Advance.
+    /// Number of items reserved by the latest GetSpan/GetMemory call.
     /// </summary>
     private int _available;
-
-    /// <summary>
-    /// Tracks the disposed state of the writer to prevent use-after-free errors.
-    /// </summary>
-    private bool _disposed;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ResizableSpanWriter{T}"/> class.
@@ -73,12 +63,12 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="initialCapacity"/> is not valid.</exception>
     public ResizableSpanWriter(ArrayPool<T> pool, int initialCapacity = 0)
     {
+        ArgumentNullException.ThrowIfNull(pool);
         ArgumentOutOfRangeException.ThrowIfNegative(initialCapacity);
 
         _pool = pool;
         _index = 0;
         _available = 0;
-        _disposed = false;
         _array = initialCapacity == 0 ? [] : pool.Rent(initialCapacity);
     }
 
@@ -89,6 +79,8 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     public void Reset()
     {
         ThrowIfDisposed();
+        if (_index > 0 && RuntimeHelpers.IsReferenceOrContainsReferences<T>() && _array is not null)
+            Array.Clear(_array, 0, _index);
         _index = 0;
         _available = 0;
     }
@@ -131,23 +123,35 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     }
 
     /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Advance(int count)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(count);
-        ThrowIfDisposed();
+
+        if (count == 0)
+        {
+            ThrowIfDisposed();
+            _available = 0;
+            return;
+        }
 
         if (count > _available)
+        {
+            if (_array is null)
+                ThrowDisposed();
             throw new InvalidOperationException("Cannot advance past the end of the reserved buffer segment.");
+        }
 
         _index += count;
-        _available = 0; // The reservation is consumed after advancing.
+        _available = 0;
     }
 
     /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Memory<T> GetMemory(int sizeHint = 0)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(sizeHint);
         if (sizeHint == 0) sizeHint = DefaultSizeHint;
-        ThrowIfDisposed();
         Grow(sizeHint);
 
         _available = sizeHint;
@@ -155,10 +159,11 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     }
 
     /// <inheritdoc />
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Span<T> GetSpan(int sizeHint = 0)
     {
+        ArgumentOutOfRangeException.ThrowIfNegative(sizeHint);
         if (sizeHint == 0) sizeHint = DefaultSizeHint;
-        ThrowIfDisposed();
         Grow(sizeHint);
 
         _available = sizeHint;
@@ -193,7 +198,7 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Write(T item)
     {
-        _available = 0; // Direct writes invalidate any outstanding reservation.
+        _available = 0;
         Grow(1);
         _array![_index] = item;
         _index += 1;
@@ -206,8 +211,7 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Copy(ReadOnlySpan<T> items)
     {
-        if (items.IsEmpty) return;
-        _available = 0; // Direct writes invalidate any outstanding reservation.
+        _available = 0;
         Grow(items.Length);
         items.CopyTo(new Span<T>(_array, _index, items.Length));
         _index += items.Length;
@@ -221,75 +225,57 @@ public sealed class ResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOwner<T>
     private void Grow(int size)
     {
         ThrowIfDisposed();
-        if (!GrowIfRequired(size, out var newSize)) return;
+        var newIndex = checked(_index + size);
+        var array = _array!;
+        if (newIndex <= array.Length) return;
 
-        var newBuffer = _pool.Rent(newSize);
+        var nextPow2 = BitOperations.RoundUpToPowerOf2((uint)newIndex);
+        if (nextPow2 > int.MaxValue)
+            throw new OverflowException($"Required buffer size {nextPow2} exceeds maximum array length.");
+
+        var newBuffer = _pool.Rent((int)nextPow2);
         if (_index > 0)
         {
-            var source = new ReadOnlySpan<T>(_array, 0, _index);
-            source.CopyTo(newBuffer);
+            new ReadOnlySpan<T>(array, 0, _index).CopyTo(newBuffer);
         }
 
-        if (_array is not null && _array.Length > 0)
+        if (array.Length > 0)
         {
-            _pool.Return(_array, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            _pool.Return(array, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
         }
 
         _array = newBuffer;
     }
 
-    /// <summary>
-    /// Determines if the buffer needs to grow and calculates the required new size.
-    /// </summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private bool GrowIfRequired(int size, out int length)
-    {
-        length = default;
-        var newIndex = checked(_index + size); // Use int for performance, allow overflow exception
-
-        // Optimized check: Use subtraction to avoid bounds check elimination issues?
-        // Original code used: if (_array!.Length - newIndex >= 0) return false;
-        // My check: if (_array is not null && newIndex <= _array.Length) return false;
-        // Let's stick to the safe, standard pattern but remove the long cast.
-
-        if (_array is not null && newIndex <= _array.Length)
-        {
-            return false;
-        }
-
-        var nextPow2 = BitOperations.RoundUpToPowerOf2((uint)newIndex);
-        if (nextPow2 > int.MaxValue)
-        {
-            throw new OutOfMemoryException($"Required buffer size {nextPow2} exceeds maximum array length.");
-        }
-        length = (int)nextPow2;
-
-        if (length < SmallBufferThreshold) length = SmallBufferThreshold;
-
-        return true;
-    }
-
     /// <inheritdoc />
     public void Dispose()
     {
-        if (_disposed) return;
-
-        _disposed = true;
-
-        if (_array != null && _array.Length > 0)
+        if (_array is null) return;
+        if (_array.Length > 0)
         {
             _pool.Return(_array, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
         }
         _array = null;
+        _available = 0;
     }
 
     /// <summary>
     /// Throws an <see cref="ObjectDisposedException"/> if the writer has been disposed.
     /// </summary>
     [StackTraceHidden]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void ThrowIfDisposed()
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (_array is null)
+        {
+            ThrowDisposed();
+        }
+    }
+
+    [StackTraceHidden]
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowDisposed()
+    {
+        throw new ObjectDisposedException(nameof(ResizableSpanWriter<T>));
     }
 }
-

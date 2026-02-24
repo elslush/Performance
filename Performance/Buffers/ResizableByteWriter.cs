@@ -1,4 +1,5 @@
 ﻿using System.Buffers;
+using System.Diagnostics.CodeAnalysis;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -10,6 +11,10 @@ namespace Performance.Buffers;
 /// Implements <see cref="Stream"/>, <see cref="IBufferWriter{T}"/>, and <see cref="IMemoryOwner{T}"/>
 /// to provide a flexible and efficient way to build byte arrays dynamically.
 /// </summary>
+[SuppressMessage(
+    "Naming",
+    "CA1710:Identifiers should have correct suffix",
+    Justification = "The type represents a writer API while deriving from Stream for compatibility.")]
 public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOwner<byte>
 {
     /// <summary>
@@ -62,6 +67,7 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
     /// <param name="initialCapacity">The minimum initial capacity of the buffer.</param>
     public ResizableByteWriter(ArrayPool<byte> pool, int initialCapacity = 0)
     {
+        ArgumentNullException.ThrowIfNull(pool);
         ArgumentOutOfRangeException.ThrowIfNegative(initialCapacity);
         _pool = pool;
         _index = 0;
@@ -170,7 +176,7 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
         ArgumentOutOfRangeException.ThrowIfNegative(count);
         ThrowIfDisposed();
 
-        if (count > _available || _available == 0)
+        if (count > _available)
             throw new InvalidOperationException("Cannot advance past the end of the reserved buffer segment.");
 
         _index += count;
@@ -258,23 +264,24 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
         src.CopyTo(newBuffer);
 
         if (_array is not null && _array.Length > 0)
-            _pool.Return(_array);
+            _pool.Return(_array, RuntimeHelpers.IsReferenceOrContainsReferences<byte>());
 
         _array = newBuffer;
     }
 
     /// <inheritdoc />
-    public new void Dispose()
+    protected override void Dispose(bool disposing)
     {
         if (_disposed) return;
 
         _disposed = true;
 
-        if (_array != null && _array.Length > 0)
+        if (disposing && _array is { Length: > 0 })
         {
-            _pool.Return(_array);
+            _pool.Return(_array, RuntimeHelpers.IsReferenceOrContainsReferences<byte>());
         }
         _array = null;
+        base.Dispose(disposing);
     }
 
     /// <summary>
@@ -286,4 +293,3 @@ public sealed class ResizableByteWriter : Stream, IBufferWriter<byte>, IMemoryOw
         ObjectDisposedException.ThrowIf(_disposed, this);
     }
 }
-

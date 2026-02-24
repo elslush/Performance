@@ -1277,6 +1277,36 @@ public sealed class ResizableSpanWriterTests
         Assert.Throws<ArgumentOutOfRangeException>(() => new ResizableSpanWriter<byte>(negativeCapacity));
     }
 
+    [Fact]
+    public void Constructor_WithNullPoolAndZeroCapacity_ThrowsArgumentNullException()
+    {
+        var ex = Assert.Throws<ArgumentNullException>(() =>
+            new ResizableSpanWriter<byte>(null!, initialCapacity: 0));
+        Assert.Equal("pool", ex.ParamName);
+    }
+
+    [Fact]
+    public void Constructor_WithNullPoolAndPositiveCapacity_ThrowsArgumentNullException()
+    {
+        var ex = Assert.Throws<ArgumentNullException>(() =>
+            new ResizableSpanWriter<byte>(null!, initialCapacity: 10));
+        Assert.Equal("pool", ex.ParamName);
+    }
+
+    [Fact]
+    public void GetSpan_WithMaxIntSizeHint_ThrowsOverflowException()
+    {
+        using var writer = new ResizableSpanWriter<byte>(initialCapacity: 0);
+        Assert.Throws<OverflowException>(() => writer.GetSpan(int.MaxValue));
+    }
+
+    [Fact]
+    public void GetMemory_WithMaxIntSizeHint_ThrowsOverflowException()
+    {
+        using var writer = new ResizableSpanWriter<byte>(initialCapacity: 0);
+        Assert.Throws<OverflowException>(() => writer.GetMemory(int.MaxValue));
+    }
+
     /// <summary>
     /// Tests that the constructor with zero capacity creates a writer that can grow dynamically
     /// when data is written.
@@ -1706,7 +1736,6 @@ public sealed class ResizableSpanWriterTests
         var memoryOwner = (IMemoryOwner<int>)writer;
 
         // Assert
-        Assert.NotNull(memoryOwner.Memory);
         Assert.True(memoryOwner.Memory.Length >= 0);
     }
 
@@ -1905,4 +1934,3 @@ public sealed partial class ResizableSpanWriterTests_Dispose
         }
     }
 }
-

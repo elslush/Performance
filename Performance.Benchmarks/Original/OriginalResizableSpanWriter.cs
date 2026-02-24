@@ -10,7 +10,7 @@ public sealed class OriginalResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOw
     private T[]? _array;
     private readonly ArrayPool<T> _pool;
     private int _index;
-    private readonly bool _disposed;
+    private bool _disposed;
 
     public OriginalResizableSpanWriter()
         : this(ArrayPool<T>.Shared)
@@ -139,6 +139,7 @@ public sealed class OriginalResizableSpanWriter<T> : IBufferWriter<T>, IMemoryOw
     public void Dispose()
     {
         if (_disposed) return;
+        _disposed = true;
 
         if (_array != null)
         {

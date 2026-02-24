@@ -166,16 +166,28 @@ Console.WriteLine($"Trimmed start length: {trimmedMemory.Length}");
 
 ## Benchmarks
 
-Run the full benchmark suite (ResizableByteWriter, ResizableSpanWriter, Trimming, WhitespaceSplit) with the BenchmarkSwitcher entrypoint:
+Run the full benchmark suite (ResizableByteWriter, ResizableSpanWriter, chunked streaming writes, SpanSplit, Trimming, WhitespaceSplit) with the BenchmarkSwitcher entrypoint:
 
 ```bash
 dotnet run -c Release --project Performance.Benchmarks -- --filter *
 ```
 
-To focus on a single area, filter by class or benchmark name, for example the new trimming comparisons:
+To focus on a single area, filter by class or benchmark name:
 
 ```bash
 dotnet run -c Release --project Performance.Benchmarks -- --filter *TrimmingBench*
+```
+
+```bash
+dotnet run -c Release --project Performance.Benchmarks -- --filter *ResizableByteWriterStreamingBench*
+```
+
+```bash
+dotnet run -c Release --project Performance.Benchmarks -- --filter *ResizableSpanWriterStreamingBench*
+```
+
+```bash
+dotnet run -c Release --project Performance.Benchmarks -- --filter *SpanSplitEnumeratorBench*
 ```
 
 Baselines use the previous implementations (kept in the `Original/` folder) so performance deltas are easy to spot.

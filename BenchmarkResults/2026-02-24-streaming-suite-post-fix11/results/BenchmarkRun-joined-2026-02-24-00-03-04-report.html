@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>BenchmarkRun-joined-2026-02-24-00-03-04</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.15.3, Linux Ubuntu 24.04.4 LTS (Noble Numbat)
+INTEL XEON GOLD 6548N 0.80GHz, 2 CPU, 128 logical and 64 physical cores
+.NET SDK 10.0.100
+  [Host]     : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v4
+  Job-CNUJVU : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v4
+</code></pre>
+<pre><code>InvocationCount=1  UnrollFactor=1  
+</code></pre>
+
+<table>
+<thead><tr><th>Type                       </th><th>Method                </th><th>TotalBytes</th><th>ChunkSize</th><th>TotalItems</th><th>Mean </th><th>Ratio</th><th>RatioSD</th><th>Allocated</th><th>Alloc Ratio</th>
+</tr>
+</thead><tbody><tr><td>ResizableByteWriterStreamingBench</td><td>Old.Write(chunked)</td><td>4096</td><td>16</td><td>?</td><td>7,026.1 ns</td><td>1.00</td><td>0.03</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>New.Write(chunked)</td><td>4096</td><td>16</td><td>?</td><td>7,880.7 ns</td><td>1.12</td><td>0.09</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>Old.GetSpan+Advance(chunked)</td><td>4096</td><td>16</td><td>?</td><td>8,319.2 ns</td><td>1.18</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>New.GetSpan+Advance(chunked)</td><td>4096</td><td>16</td><td>?</td><td>8,553.3 ns</td><td>1.22</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>Old.Write(chunked)</td><td>?</td><td>16</td><td>4096</td><td>4,145.8 ns</td><td>1.00</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>New.Write(chunked)</td><td>?</td><td>16</td><td>4096</td><td>4,027.9 ns</td><td>0.97</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>Old.GetSpan+Advance(chunked)</td><td>?</td><td>16</td><td>4096</td><td>7,932.4 ns</td><td>1.91</td><td>0.04</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>New.GetSpan+Advance(chunked)</td><td>?</td><td>16</td><td>4096</td><td>7,603.0 ns</td><td>1.83</td><td>0.04</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>Old.Write(chunked)</td><td>4096</td><td>256</td><td>?</td><td>606.3 ns</td><td>1.00</td><td>0.07</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>New.Write(chunked)</td><td>4096</td><td>256</td><td>?</td><td>566.4 ns</td><td>0.94</td><td>0.07</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>Old.GetSpan+Advance(chunked)</td><td>4096</td><td>256</td><td>?</td><td>759.8 ns</td><td>1.26</td><td>0.08</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>New.GetSpan+Advance(chunked)</td><td>4096</td><td>256</td><td>?</td><td>730.6 ns</td><td>1.21</td><td>0.07</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>Old.Write(chunked)</td><td>?</td><td>256</td><td>4096</td><td>644.6 ns</td><td>1.00</td><td>0.08</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>New.Write(chunked)</td><td>?</td><td>256</td><td>4096</td><td>647.1 ns</td><td>1.01</td><td>0.06</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>Old.GetSpan+Advance(chunked)</td><td>?</td><td>256</td><td>4096</td><td>968.8 ns</td><td>1.51</td><td>0.09</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>New.GetSpan+Advance(chunked)</td><td>?</td><td>256</td><td>4096</td><td>1,038.1 ns</td><td>1.62</td><td>0.10</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>Old.Write(chunked)</td><td>4096</td><td>4096</td><td>?</td><td>170.8 ns</td><td>1.02</td><td>0.18</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>New.Write(chunked)</td><td>4096</td><td>4096</td><td>?</td><td>182.6 ns</td><td>1.09</td><td>0.15</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>Old.GetSpan+Advance(chunked)</td><td>4096</td><td>4096</td><td>?</td><td>195.9 ns</td><td>1.17</td><td>0.20</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>New.GetSpan+Advance(chunked)</td><td>4096</td><td>4096</td><td>?</td><td>190.4 ns</td><td>1.13</td><td>0.16</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>Old.Write(chunked)</td><td>?</td><td>4096</td><td>4096</td><td>439.5 ns</td><td>1.03</td><td>0.27</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>New.Write(chunked)</td><td>?</td><td>4096</td><td>4096</td><td>432.6 ns</td><td>1.02</td><td>0.21</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>Old.GetSpan+Advance(chunked)</td><td>?</td><td>4096</td><td>4096</td><td>426.8 ns</td><td>1.00</td><td>0.27</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>New.GetSpan+Advance(chunked)</td><td>?</td><td>4096</td><td>4096</td><td>419.8 ns</td><td>0.99</td><td>0.19</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>Old.Write(chunked)</td><td>65536</td><td>16</td><td>?</td><td>39,388.9 ns</td><td>1.00</td><td>0.06</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>New.Write(chunked)</td><td>65536</td><td>16</td><td>?</td><td>39,997.4 ns</td><td>1.02</td><td>0.05</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>Old.GetSpan+Advance(chunked)</td><td>65536</td><td>16</td><td>?</td><td>41,400.6 ns</td><td>1.05</td><td>0.05</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>New.GetSpan+Advance(chunked)</td><td>65536</td><td>16</td><td>?</td><td>42,183.7 ns</td><td>1.07</td><td>0.06</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>Old.Write(chunked)</td><td>?</td><td>16</td><td>65536</td><td>30,684.8 ns</td><td>1.00</td><td>0.01</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>New.Write(chunked)</td><td>?</td><td>16</td><td>65536</td><td>21,055.6 ns</td><td>0.69</td><td>0.01</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>Old.GetSpan+Advance(chunked)</td><td>?</td><td>16</td><td>65536</td><td>15,994.8 ns</td><td>0.52</td><td>0.00</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>New.GetSpan+Advance(chunked)</td><td>?</td><td>16</td><td>65536</td><td>17,797.1 ns</td><td>0.58</td><td>0.01</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>Old.Write(chunked)</td><td>65536</td><td>256</td><td>?</td><td>7,591.9 ns</td><td>1.00</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>New.Write(chunked)</td><td>65536</td><td>256</td><td>?</td><td>7,479.4 ns</td><td>0.99</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>Old.GetSpan+Advance(chunked)</td><td>65536</td><td>256</td><td>?</td><td>10,855.0 ns</td><td>1.43</td><td>0.03</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>New.GetSpan+Advance(chunked)</td><td>65536</td><td>256</td><td>?</td><td>9,942.3 ns</td><td>1.31</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>Old.Write(chunked)</td><td>?</td><td>256</td><td>65536</td><td>9,011.9 ns</td><td>1.00</td><td>0.01</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>New.Write(chunked)</td><td>?</td><td>256</td><td>65536</td><td>8,846.6 ns</td><td>0.98</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>Old.GetSpan+Advance(chunked)</td><td>?</td><td>256</td><td>65536</td><td>14,050.2 ns</td><td>1.56</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>New.GetSpan+Advance(chunked)</td><td>?</td><td>256</td><td>65536</td><td>14,384.5 ns</td><td>1.60</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>Old.Write(chunked)</td><td>65536</td><td>4096</td><td>?</td><td>1,621.3 ns</td><td>1.00</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>New.Write(chunked)</td><td>65536</td><td>4096</td><td>?</td><td>1,729.8 ns</td><td>1.07</td><td>0.03</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>Old.GetSpan+Advance(chunked)</td><td>65536</td><td>4096</td><td>?</td><td>1,915.0 ns</td><td>1.18</td><td>0.03</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableByteWriterStreamingBench</td><td>New.GetSpan+Advance(chunked)</td><td>65536</td><td>4096</td><td>?</td><td>1,890.7 ns</td><td>1.17</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>Old.Write(chunked)</td><td>?</td><td>4096</td><td>65536</td><td>5,297.0 ns</td><td>1.00</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>New.Write(chunked)</td><td>?</td><td>4096</td><td>65536</td><td>5,440.2 ns</td><td>1.03</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>Old.GetSpan+Advance(chunked)</td><td>?</td><td>4096</td><td>65536</td><td>5,978.2 ns</td><td>1.13</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>ResizableSpanWriterStreamingBench</td><td>New.GetSpan+Advance(chunked)</td><td>?</td><td>4096</td><td>65536</td><td>6,204.6 ns</td><td>1.17</td><td>0.02</td><td>-</td><td>NA</td>
+</tr></tbody></table>
+</body>
+</html>

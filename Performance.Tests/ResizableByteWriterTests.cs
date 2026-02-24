@@ -555,32 +555,31 @@ public sealed class ResizableByteWriterTests
     }
 
     /// <summary>
-    /// Tests that the constructor succeeds when pool is null and initialCapacity is zero.
+    /// Tests that the constructor validates pool when initialCapacity is zero.
     /// Input: pool = null, initialCapacity = 0
-    /// Expected: Object created successfully (no rent call needed for zero capacity)
+    /// Expected: ArgumentNullException is thrown.
     /// </summary>
     [Fact]
-    public void Constructor_WithNullPoolAndZeroCapacity_Succeeds()
+    public void Constructor_WithNullPoolAndZeroCapacity_ThrowsArgumentNullException()
     {
-        // Arrange & Act
-        using var writer = new ResizableByteWriter(null!, initialCapacity: 0);
-
-        // Assert
-        Assert.Equal(0, writer.Length);
-        Assert.Empty(writer.WrittenSpan.ToArray());
+        // Arrange, Act & Assert
+        var ex = Assert.Throws<ArgumentNullException>(() =>
+            new ResizableByteWriter(null!, initialCapacity: 0));
+        Assert.Equal("pool", ex.ParamName);
     }
 
     /// <summary>
-    /// Tests that the constructor throws NullReferenceException when pool is null and initialCapacity is positive.
+    /// Tests that the constructor validates pool when initialCapacity is positive.
     /// Input: pool = null, initialCapacity = 10
-    /// Expected: NullReferenceException is thrown when attempting to rent from null pool
+    /// Expected: ArgumentNullException is thrown.
     /// </summary>
     [Fact]
-    public void Constructor_WithNullPoolAndPositiveCapacity_ThrowsNullReferenceException()
+    public void Constructor_WithNullPoolAndPositiveCapacity_ThrowsArgumentNullException()
     {
         // Arrange & Act & Assert
-        Assert.Throws<NullReferenceException>(() =>
+        var ex = Assert.Throws<ArgumentNullException>(() =>
             new ResizableByteWriter(null!, initialCapacity: 10));
+        Assert.Equal("pool", ex.ParamName);
     }
 
     /// <summary>
@@ -1918,20 +1917,22 @@ public sealed class ResizableByteWriterTests
     }
 
     /// <summary>
-    /// Tests that Advance with zero count on zero reservation throws.
-    /// Verifies that even zero advance requires a valid reservation.
-    /// Expected: InvalidOperationException due to no available space.
+    /// Tests that Advance with zero count on zero reservation is a valid no-op.
+    /// Per the IBufferWriter&lt;T&gt; contract, Advance(0) should always succeed.
+    /// Expected: No exception is thrown, writer state is unchanged.
     /// </summary>
     [Fact]
-    public void Advance_ZeroCountWithZeroReservation_ThrowsInvalidOperationException()
+    public void Advance_ZeroCountWithZeroReservation_IsNoOp()
     {
         // Arrange
         using var writer = new ResizableByteWriter(initialCapacity: 16);
         // No GetSpan/GetMemory call - _available is 0
 
-        // Act & Assert
-        var ex = Assert.Throws<InvalidOperationException>(() => writer.Advance(0));
-        Assert.Contains("Cannot advance past the end of the reserved buffer segment", ex.Message);
+        // Act — Advance(0) should be a valid no-op
+        writer.Advance(0);
+
+        // Assert — writer state unchanged
+        Assert.Equal(0, writer.Length);
     }
 
     /// <summary>
@@ -3594,4 +3595,3 @@ public sealed class ResizableByteWriterTests
         Assert.Equal(10L, writer.Length);
     }
 }
-

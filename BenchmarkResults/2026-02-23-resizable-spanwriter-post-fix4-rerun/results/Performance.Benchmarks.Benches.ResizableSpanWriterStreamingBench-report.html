@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>BenchmarkRun-joined-2026-02-23-23-46-34</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.15.3, Linux Ubuntu 24.04.4 LTS (Noble Numbat)
+INTEL XEON GOLD 6548N 0.79GHz, 2 CPU, 128 logical and 64 physical cores
+.NET SDK 10.0.100
+  [Host]     : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v4
+  Job-CNUJVU : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v4
+</code></pre>
+<pre><code>InvocationCount=1  UnrollFactor=1  
+</code></pre>
+
+<table>
+<thead><tr><th>Method                </th><th>TotalItems</th><th>ChunkSize</th><th>Mean </th><th>Ratio</th><th>RatioSD</th><th>Allocated</th><th>Alloc Ratio</th>
+</tr>
+</thead><tbody><tr><td>Old.Write(chunked)</td><td>4096</td><td>16</td><td>4,241.7 ns</td><td>1.00</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>New.Write(chunked)</td><td>4096</td><td>16</td><td>4,462.8 ns</td><td>1.05</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>Old.GetSpan+Advance(chunked)</td><td>4096</td><td>16</td><td>8,822.9 ns</td><td>2.08</td><td>0.04</td><td>-</td><td>NA</td>
+</tr><tr><td>New.GetSpan+Advance(chunked)</td><td>4096</td><td>16</td><td>9,904.6 ns</td><td>2.34</td><td>0.07</td><td>-</td><td>NA</td>
+</tr><tr><td>Old.Write(chunked)</td><td>4096</td><td>256</td><td>644.6 ns</td><td>1.00</td><td>0.06</td><td>-</td><td>NA</td>
+</tr><tr><td>New.Write(chunked)</td><td>4096</td><td>256</td><td>681.3 ns</td><td>1.06</td><td>0.07</td><td>-</td><td>NA</td>
+</tr><tr><td>Old.GetSpan+Advance(chunked)</td><td>4096</td><td>256</td><td>975.6 ns</td><td>1.52</td><td>0.07</td><td>-</td><td>NA</td>
+</tr><tr><td>New.GetSpan+Advance(chunked)</td><td>4096</td><td>256</td><td>1,003.0 ns</td><td>1.56</td><td>0.08</td><td>-</td><td>NA</td>
+</tr><tr><td>Old.Write(chunked)</td><td>4096</td><td>4096</td><td>571.9 ns</td><td>1.04</td><td>0.28</td><td>-</td><td>NA</td>
+</tr><tr><td>New.Write(chunked)</td><td>4096</td><td>4096</td><td>386.5 ns</td><td>0.70</td><td>0.16</td><td>-</td><td>NA</td>
+</tr><tr><td>Old.GetSpan+Advance(chunked)</td><td>4096</td><td>4096</td><td>412.7 ns</td><td>0.75</td><td>0.18</td><td>-</td><td>NA</td>
+</tr><tr><td>New.GetSpan+Advance(chunked)</td><td>4096</td><td>4096</td><td>404.9 ns</td><td>0.73</td><td>0.17</td><td>-</td><td>NA</td>
+</tr><tr><td>Old.Write(chunked)</td><td>65536</td><td>16</td><td>21,293.9 ns</td><td>1.00</td><td>0.01</td><td>-</td><td>NA</td>
+</tr><tr><td>New.Write(chunked)</td><td>65536</td><td>16</td><td>29,466.8 ns</td><td>1.38</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>Old.GetSpan+Advance(chunked)</td><td>65536</td><td>16</td><td>39,097.2 ns</td><td>1.84</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>New.GetSpan+Advance(chunked)</td><td>65536</td><td>16</td><td>15,887.0 ns</td><td>0.75</td><td>0.01</td><td>-</td><td>NA</td>
+</tr><tr><td>Old.Write(chunked)</td><td>65536</td><td>256</td><td>9,189.2 ns</td><td>1.00</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>New.Write(chunked)</td><td>65536</td><td>256</td><td>8,855.6 ns</td><td>0.96</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>Old.GetSpan+Advance(chunked)</td><td>65536</td><td>256</td><td>14,022.5 ns</td><td>1.53</td><td>0.03</td><td>-</td><td>NA</td>
+</tr><tr><td>New.GetSpan+Advance(chunked)</td><td>65536</td><td>256</td><td>14,620.2 ns</td><td>1.59</td><td>0.03</td><td>-</td><td>NA</td>
+</tr><tr><td>Old.Write(chunked)</td><td>65536</td><td>4096</td><td>5,658.5 ns</td><td>1.00</td><td>0.03</td><td>-</td><td>NA</td>
+</tr><tr><td>New.Write(chunked)</td><td>65536</td><td>4096</td><td>5,526.9 ns</td><td>0.98</td><td>0.04</td><td>-</td><td>NA</td>
+</tr><tr><td>Old.GetSpan+Advance(chunked)</td><td>65536</td><td>4096</td><td>6,264.1 ns</td><td>1.11</td><td>0.02</td><td>-</td><td>NA</td>
+</tr><tr><td>New.GetSpan+Advance(chunked)</td><td>65536</td><td>4096</td><td>5,876.8 ns</td><td>1.04</td><td>0.02</td><td>-</td><td>NA</td>
+</tr></tbody></table>
+</body>
+</html>
