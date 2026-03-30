@@ -790,4 +790,222 @@ public partial class TrimmingTests
             { new byte[] { 0x00 }, new byte[] { 0x00 } } // Null byte is not whitespace
         };
     }
+
+    // ================================================================
+    // TrimEnd (ReadOnlySpan<byte>) tests
+    // ================================================================
+
+    [Fact]
+    public void TrimEnd_Span_EmptySpan_ReturnsEmptySpan()
+    {
+        ReadOnlySpan<byte> span = ReadOnlySpan<byte>.Empty;
+        ReadOnlySpan<byte> result = span.TrimEnd();
+        Assert.True(result.IsEmpty);
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0x20 })]
+    [InlineData(new byte[] { 0x09 })]
+    [InlineData(new byte[] { 0x0D })]
+    [InlineData(new byte[] { 0x0A })]
+    [InlineData(new byte[] { 0x0B })]
+    [InlineData(new byte[] { 0x0C })]
+    [InlineData(new byte[] { 0x20, 0x09, 0x0D, 0x0A })]
+    public void TrimEnd_Span_AllWhitespace_ReturnsEmptySpan(byte[] input)
+    {
+        ReadOnlySpan<byte> span = new ReadOnlySpan<byte>(input);
+        ReadOnlySpan<byte> result = span.TrimEnd();
+        Assert.True(result.IsEmpty);
+    }
+
+    [Fact]
+    public void TrimEnd_Span_NoTrailingWhitespace_ReturnsOriginal()
+    {
+        byte[] input = new byte[] { 0x41, 0x42, 0x43 };
+        ReadOnlySpan<byte> span = new ReadOnlySpan<byte>(input);
+        ReadOnlySpan<byte> result = span.TrimEnd();
+        Assert.Equal(3, result.Length);
+        Assert.True(result.SequenceEqual(input));
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0x41, 0x20 }, new byte[] { 0x41 })]
+    [InlineData(new byte[] { 0x41, 0x09 }, new byte[] { 0x41 })]
+    [InlineData(new byte[] { 0x41, 0x0D, 0x0A }, new byte[] { 0x41 })]
+    [InlineData(new byte[] { 0x41, 0x42, 0x20, 0x09, 0x0D }, new byte[] { 0x41, 0x42 })]
+    public void TrimEnd_Span_TrailingWhitespace_RemovesTrailing(byte[] input, byte[] expected)
+    {
+        ReadOnlySpan<byte> span = new ReadOnlySpan<byte>(input);
+        ReadOnlySpan<byte> result = span.TrimEnd();
+        Assert.Equal(expected.Length, result.Length);
+        Assert.True(result.SequenceEqual(expected));
+    }
+
+    [Fact]
+    public void TrimEnd_Span_PreservesLeadingWhitespace()
+    {
+        byte[] input = new byte[] { 0x20, 0x09, 0x41, 0x42, 0x20 };
+        byte[] expected = new byte[] { 0x20, 0x09, 0x41, 0x42 };
+        ReadOnlySpan<byte> result = new ReadOnlySpan<byte>(input).TrimEnd();
+        Assert.Equal(expected.Length, result.Length);
+        Assert.True(result.SequenceEqual(expected));
+    }
+
+    // ================================================================
+    // TrimEnd (Memory<byte>) tests
+    // ================================================================
+
+    [Fact]
+    public void TrimEnd_Memory_EmptyMemory_ReturnsEmpty()
+    {
+        Memory<byte> memory = Memory<byte>.Empty;
+        Memory<byte> result = memory.TrimEnd();
+        Assert.True(result.IsEmpty);
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0x20 })]
+    [InlineData(new byte[] { 0x09, 0x0A, 0x0D })]
+    public void TrimEnd_Memory_AllWhitespace_ReturnsEmpty(byte[] input)
+    {
+        Memory<byte> memory = new Memory<byte>(input);
+        Memory<byte> result = memory.TrimEnd();
+        Assert.Equal(0, result.Length);
+    }
+
+    [Fact]
+    public void TrimEnd_Memory_TrailingWhitespace_RemovesTrailing()
+    {
+        byte[] input = new byte[] { 0x48, 0x69, 0x20, 0x09 };
+        byte[] expected = new byte[] { 0x48, 0x69 };
+        Memory<byte> result = new Memory<byte>(input).TrimEnd();
+        Assert.Equal(expected.Length, result.Length);
+        Assert.True(result.Span.SequenceEqual(expected));
+    }
+
+    [Fact]
+    public void TrimEnd_Memory_NoTrailingWhitespace_ReturnsOriginalLength()
+    {
+        byte[] input = new byte[] { 0x41, 0x42, 0x43 };
+        Memory<byte> result = new Memory<byte>(input).TrimEnd();
+        Assert.Equal(3, result.Length);
+    }
+
+    [Fact]
+    public void TrimEnd_Memory_SharesBackingStore()
+    {
+        byte[] backing = new byte[] { 0x41, 0x42, 0x20, 0x20 };
+        Memory<byte> result = new Memory<byte>(backing).TrimEnd();
+        Assert.Equal(2, result.Length);
+        backing[0] = 0x58;
+        Assert.Equal(0x58, result.Span[0]);
+    }
+
+    // ================================================================
+    // TrimStart (Memory<byte>) tests
+    // ================================================================
+
+    [Fact]
+    public void TrimStart_Memory_EmptyMemory_ReturnsEmpty()
+    {
+        Memory<byte> memory = Memory<byte>.Empty;
+        Memory<byte> result = memory.TrimStart();
+        Assert.True(result.IsEmpty);
+    }
+
+    [Theory]
+    [InlineData(new byte[] { 0x20 })]
+    [InlineData(new byte[] { 0x09, 0x0A, 0x0D, 0x0B, 0x0C })]
+    public void TrimStart_Memory_AllWhitespace_ReturnsEmpty(byte[] input)
+    {
+        Memory<byte> memory = new Memory<byte>(input);
+        Memory<byte> result = memory.TrimStart();
+        Assert.Equal(0, result.Length);
+    }
+
+    [Fact]
+    public void TrimStart_Memory_LeadingWhitespace_RemovesLeading()
+    {
+        byte[] input = new byte[] { 0x20, 0x09, 0x48, 0x69 };
+        byte[] expected = new byte[] { 0x48, 0x69 };
+        Memory<byte> result = new Memory<byte>(input).TrimStart();
+        Assert.Equal(expected.Length, result.Length);
+        Assert.True(result.Span.SequenceEqual(expected));
+    }
+
+    [Fact]
+    public void TrimStart_Memory_NoLeadingWhitespace_ReturnsOriginalLength()
+    {
+        byte[] input = new byte[] { 0x41, 0x42, 0x20 };
+        Memory<byte> result = new Memory<byte>(input).TrimStart();
+        Assert.Equal(3, result.Length);
+    }
+
+    [Fact]
+    public void TrimStart_Memory_SharesBackingStore()
+    {
+        byte[] backing = new byte[] { 0x20, 0x20, 0x41, 0x42 };
+        Memory<byte> result = new Memory<byte>(backing).TrimStart();
+        Assert.Equal(2, result.Length);
+        backing[2] = 0x58;
+        Assert.Equal(0x58, result.Span[0]);
+    }
+
+    // ================================================================
+    // VT (0x0B) and FF (0x0C) specific tests
+    // ================================================================
+
+    [Fact]
+    public void Trim_Span_VtAndFf_TreatedAsWhitespace()
+    {
+        byte[] input = new byte[] { 0x0B, 0x0C, 0x41, 0x0B, 0x0C };
+        ReadOnlySpan<byte> result = new ReadOnlySpan<byte>(input).Trim();
+        Assert.Equal(1, result.Length);
+        Assert.Equal(0x41, result[0]);
+    }
+
+    [Fact]
+    public void TrimStart_Span_VtAndFf_TreatedAsWhitespace()
+    {
+        byte[] input = new byte[] { 0x0B, 0x0C, 0x41 };
+        ReadOnlySpan<byte> result = new ReadOnlySpan<byte>(input).TrimStart();
+        Assert.Equal(1, result.Length);
+        Assert.Equal(0x41, result[0]);
+    }
+
+    [Fact]
+    public void TrimEnd_Span_VtAndFf_TreatedAsWhitespace()
+    {
+        byte[] input = new byte[] { 0x41, 0x0B, 0x0C };
+        ReadOnlySpan<byte> result = new ReadOnlySpan<byte>(input).TrimEnd();
+        Assert.Equal(1, result.Length);
+        Assert.Equal(0x41, result[0]);
+    }
+
+    [Fact]
+    public void Trim_Memory_VtAndFf_TreatedAsWhitespace()
+    {
+        byte[] input = new byte[] { 0x0B, 0x0C, 0x41, 0x42, 0x0B, 0x0C };
+        Memory<byte> result = new Memory<byte>(input).Trim();
+        Assert.Equal(2, result.Length);
+        Assert.True(result.Span.SequenceEqual(new byte[] { 0x41, 0x42 }));
+    }
+
+    // ================================================================
+    // Trim (ReadOnlySpan<byte>) large buffer
+    // ================================================================
+
+    [Fact]
+    public void Trim_Span_LargeBuffer_TrimsCorrectly()
+    {
+        byte[] data = new byte[10_000];
+        Array.Fill(data, (byte)0x09, 0, 500);
+        for (int i = 500; i < 9500; i++) data[i] = 0x41;
+        Array.Fill(data, (byte)0x20, 9500, 500);
+
+        ReadOnlySpan<byte> result = new ReadOnlySpan<byte>(data).Trim();
+
+        Assert.Equal(9000, result.Length);
+        Assert.True(result.ToArray().All(b => b == 0x41));
+    }
 }

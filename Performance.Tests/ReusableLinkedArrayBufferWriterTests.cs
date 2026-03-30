@@ -532,6 +532,213 @@ public sealed class ReusableLinkedArrayBufferWriterTests
         }
         return data;
     }
+
+    // -------- Pinned buffer construction --------
+
+    [Fact]
+    public void Constructor_Pinned_AllocatesInitialBuffer()
+    {
+        var writer = new ReusableLinkedArrayBufferWriter(useFirstBuffer: true, pinned: true);
+
+        Assert.True(writer.DangerousGetFirstBuffer().Length >= 262_144);
+        Assert.Equal(0, writer.TotalWritten);
+    }
+
+    [Fact]
+    public void Constructor_NotPinned_NoFirstBuffer_Works()
+    {
+        var writer = new ReusableLinkedArrayBufferWriter(useFirstBuffer: false, pinned: true);
+
+        Assert.Empty(writer.DangerousGetFirstBuffer());
+        Assert.Equal(0, writer.TotalWritten);
+    }
+
+    // -------- WrittenCount and TotalWritten agree --------
+
+    [Fact]
+    public void WrittenCount_Equals_TotalWritten()
+    {
+        var writer = new ReusableLinkedArrayBufferWriter(useFirstBuffer: false, pinned: false);
+        writer.Write(new byte[] { 1, 2, 3 });
+
+        Assert.Equal(writer.TotalWritten, writer.WrittenCount);
+        Assert.Equal(3, writer.WrittenCount);
+    }
+
+    // -------- Write reuse after ToArrayAndReset --------
+
+    [Fact]
+    public void ToArrayAndReset_ThenWrite_ProducesCorrectData()
+    {
+        var writer = new ReusableLinkedArrayBufferWriter(useFirstBuffer: false, pinned: false);
+        writer.Write(new byte[] { 1, 2, 3 });
+        _ = writer.ToArrayAndReset();
+
+        writer.Write(new byte[] { 4, 5 });
+
+        Assert.Equal(new byte[] { 4, 5 }, writer.WrittenSpan.ToArray());
+        Assert.Equal(2, writer.TotalWritten);
+    }
+
+    // -------- Write reuse after WriteToAndResetAsync --------
+
+    [Fact]
+    public async Task WriteToAndResetAsync_ThenWrite_ProducesCorrectData()
+    {
+        var writer = new ReusableLinkedArrayBufferWriter(useFirstBuffer: false, pinned: false);
+        writer.Write(new byte[] { 1, 2, 3 });
+        await using var stream = new MemoryStream();
+        await writer.WriteToAndResetAsync(stream, TestContext.Current.CancellationToken);
+
+        writer.Write(new byte[] { 7, 8 });
+
+        Assert.Equal(new byte[] { 7, 8 }, writer.WrittenSpan.ToArray());
+    }
+
+    // -------- firstBuffer + extra segments --------
+
+    [Fact]
+    public void FirstBuffer_Plus_ExtraSegments_AccumulatesCorrectly()
+    {
+        var writer = new ReusableLinkedArrayBufferWriter(useFirstBuffer: true, pinned: false);
+        var first = CreateSequence(0, 262_144);
+        var second = CreateSequence(50, 1024);
+
+        writer.Write(first);
+        writer.Write(second);
+
+        Assert.Equal(first.Length + second.Length, writer.TotalWritten);
+        var result = writer.ToArray();
+        Assert.True(result.AsSpan(0, first.Length).SequenceEqual(first));
+        Assert.True(result.AsSpan(first.Length).SequenceEqual(second));
+    }
+
+    // -------- WriteByte interleaved with Write --------
+
+    [Fact]
+    public void WriteByte_Interleaved_With_Write_Accumulates()
+    {
+        var writer = new ReusableLinkedArrayBufferWriter(useFirstBuffer: false, pinned: false);
+
+        writer.WriteByte(1);
+        writer.Write(new byte[] { 2, 3 });
+        writer.WriteByte(4);
+        writer.Write(new byte[] { 5, 6, 7 }.AsSpan());
+        writer.WriteByte(8);
+
+        Assert.Equal(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }, writer.WrittenSpan.ToArray());
+        Assert.Equal(8, writer.TotalWritten);
+    }
+
+    // -------- Write empty array --------
+
+    [Fact]
+    public void Write_EmptyArray_DoesNotThrow()
+    {
+        var writer = new ReusableLinkedArrayBufferWriter(useFirstBuffer: false, pinned: false);
+        writer.Write(Array.Empty<byte>());
+
+        Assert.Equal(0, writer.TotalWritten);
+    }
+
+    // -------- Multiple resets --------
+
+    [Fact]
+    public void Multiple_Reset_Cycles_Work()
+    {
+        var writer = new ReusableLinkedArrayBufferWriter(useFirstBuffer: true, pinned: false);
+
+        for (int i = 0; i < 5; i++)
+        {
+            writer.Write(new byte[] { (byte)i, (byte)(i + 1) });
+            Assert.Equal(2, writer.TotalWritten);
+            writer.Reset();
+            Assert.Equal(0, writer.TotalWritten);
+        }
+    }
+
+    // -------- Multiple independent instances --------
+
+    [Fact]
+    public void Constructor_Multiple_CreatesIndependentInstances()
+    {
+        var w1 = new ReusableLinkedArrayBufferWriter(useFirstBuffer: false, pinned: false);
+        var w2 = new ReusableLinkedArrayBufferWriter(useFirstBuffer: false, pinned: false);
+
+        w1.Write(new byte[] { 1, 2 });
+        w2.Write(new byte[] { 3, 4, 5 });
+
+        Assert.NotSame(w1, w2);
+        Assert.Equal(2, w1.TotalWritten);
+        Assert.Equal(3, w2.TotalWritten);
+    }
+
+    // -------- GetSpan/GetMemory interleaving --------
+
+    [Fact]
+    public void GetMemory_After_GetSpan_UsesLatestReservation()
+    {
+        var writer = new ReusableLinkedArrayBufferWriter(useFirstBuffer: false, pinned: false);
+
+        _ = writer.GetSpan(4);
+        var mem = writer.GetMemory(8);
+        mem.Span[0] = 99;
+        writer.Advance(1);
+
+        Assert.Equal(new byte[] { 99 }, writer.WrittenSpan.ToArray());
+    }
+
+    // -------- Large write that exceeds multiple buffers --------
+
+    [Fact]
+    public void Write_VeryLargePayload_SpansMultipleSegments()
+    {
+        var writer = new ReusableLinkedArrayBufferWriter(useFirstBuffer: false, pinned: false);
+        var data = CreateSequence(0, 1_000_000);
+
+        writer.Write(data);
+
+        Assert.Equal(1_000_000, writer.TotalWritten);
+        Assert.True(writer.WrittenSpan.SequenceEqual(data));
+    }
+
+    // -------- Enumerator Dispose is safe --------
+
+    [Fact]
+    public void Enumerator_Dispose_IsSafe()
+    {
+        var writer = new ReusableLinkedArrayBufferWriter(useFirstBuffer: false, pinned: false);
+        writer.Write(new byte[] { 1, 2 });
+
+        var enumerator = writer.GetEnumerator();
+        while (enumerator.MoveNext()) { }
+        enumerator.Dispose(); // should not throw
+    }
+
+    // -------- TryGetWrittenMemory with firstBuffer and spill --------
+
+    [Fact]
+    public void TryGetWrittenMemory_FirstBuffer_WithSpill_ReturnsFalse()
+    {
+        var writer = new ReusableLinkedArrayBufferWriter(useFirstBuffer: true, pinned: false);
+        writer.Write(CreateSequence(0, 262_144));
+        writer.Write(new byte[] { 1 }); // spills to next segment
+
+        var success = writer.TryGetWrittenMemory(out _);
+
+        Assert.False(success);
+    }
+
+    // -------- WrittenMemory convenience on single segment --------
+
+    [Fact]
+    public void WrittenMemory_SingleSegment_MatchesWrittenSpan()
+    {
+        var writer = new ReusableLinkedArrayBufferWriter(useFirstBuffer: false, pinned: false);
+        writer.Write(new byte[] { 10, 20, 30 });
+
+        Assert.Equal(writer.WrittenSpan.ToArray(), writer.WrittenMemory.ToArray());
+    }
 }
 
 internal static class ReusableLinkedArrayBufferWriterTestExtensions

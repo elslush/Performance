@@ -1180,4 +1180,96 @@ public sealed class SpanSplitEnumeratorTests
         // Assert
         Assert.True(enumerator.Current.IsEmpty);
     }
+
+    // -------- Single separator only --------
+
+    [Fact]
+    public void Char_SingleSeparatorOnly_YieldsTwoEmptySegments()
+    {
+        var segs = SplitChars(",", ',');
+        EqualSeq(new[] { "", "" }, segs);
+    }
+
+    [Fact]
+    public void Byte_SingleSeparatorOnly_YieldsTwoEmptySegments()
+    {
+        var segs = SplitBytes(new byte[] { 0 }, 0);
+        EqualSeq(new[] { Array.Empty<byte>(), Array.Empty<byte>() }, segs);
+    }
+
+    // -------- All separators --------
+
+    [Fact]
+    public void Char_AllSeparators_YieldsOnlyEmptySegments()
+    {
+        var segs = SplitChars(",,,", ',');
+        EqualSeq(new[] { "", "", "", "" }, segs);
+    }
+
+    // -------- Single element --------
+
+    [Fact]
+    public void Char_SingleChar_NoSeparator_YieldsSingleSegment()
+    {
+        var segs = SplitChars("x", ',');
+        EqualSeq(new[] { "x" }, segs);
+    }
+
+    [Fact]
+    public void Byte_SingleElement_NoSeparator_YieldsSingleSegment()
+    {
+        var segs = SplitBytes(new byte[] { 42 }, 0);
+        EqualSeq(new[] { new byte[] { 42 } }, segs);
+    }
+
+    // -------- MoveNext after exhaustion --------
+
+    [Fact]
+    public void Char_MoveNext_AfterExhaustion_ReturnsFalse()
+    {
+        var e = new SpanSplitEnumerator<char>("a,b".AsSpan(), ',');
+        while (e.MoveNext()) { }
+
+        Assert.False(e.MoveNext());
+        Assert.False(e.MoveNext());
+    }
+
+    [Fact]
+    public void Byte_MoveNext_AfterExhaustion_ReturnsFalse()
+    {
+        var e = new SpanSplitEnumerator<byte>(new byte[] { 1, 0, 2 }, (byte)0);
+        while (e.MoveNext()) { }
+
+        Assert.False(e.MoveNext());
+        Assert.False(e.MoveNext());
+    }
+
+    // -------- Large spans --------
+
+    [Fact]
+    public void Char_LargeSpan_SplitsCorrectly()
+    {
+        var words = string.Join(",", Enumerable.Range(0, 10_000).Select(i => i.ToString()));
+        var segs = SplitChars(words, ',');
+
+        Assert.Equal(10_000, segs.Count);
+        Assert.Equal("0", segs[0]);
+        Assert.Equal("9999", segs[^1]);
+    }
+
+    // -------- Separator equals element value --------
+
+    [Fact]
+    public void Int_SeparatorIsDefault_SplitsOnZero()
+    {
+        var data = new[] { 0, 0, 0 };
+        var segs = SplitInts(data, 0);
+        EqualSeq(new[]
+        {
+            Array.Empty<int>(),
+            Array.Empty<int>(),
+            Array.Empty<int>(),
+            Array.Empty<int>(),
+        }, segs);
+    }
 }

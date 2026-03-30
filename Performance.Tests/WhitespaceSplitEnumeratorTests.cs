@@ -547,5 +547,90 @@ public sealed class WhitespaceSplitEnumeratorTests
         Assert.Single(tokens);
         Assert.Equal("token", tokens[0]);
     }
+
+    // -------- MoveNext after exhaustion --------
+
+    [Fact]
+    public void MoveNext_AfterExhaustion_ReturnsFalse()
+    {
+        var e = new WhitespaceSplitEnumerator("one two".AsSpan());
+        while (e.MoveNext()) { }
+
+        Assert.False(e.MoveNext());
+        Assert.False(e.MoveNext());
+    }
+
+    // -------- Tab-only separators --------
+
+    [Fact]
+    public void TabOnly_Separators_SplitsCorrectly()
+    {
+        EqualSeq(new[] { "alpha", "beta", "gamma" }, Tokens("alpha\tbeta\tgamma"));
+    }
+
+    // -------- CR-only separators --------
+
+    [Fact]
+    public void CrOnly_Separators_SplitsCorrectly()
+    {
+        EqualSeq(new[] { "one", "two" }, Tokens("one\rtwo"));
+    }
+
+    // -------- LF-only separators --------
+
+    [Fact]
+    public void LfOnly_Separators_SplitsCorrectly()
+    {
+        EqualSeq(new[] { "a", "b", "c" }, Tokens("a\nb\nc"));
+    }
+
+    // -------- CRLF separators --------
+
+    [Fact]
+    public void CrLf_Separators_SplitsCorrectly()
+    {
+        EqualSeq(new[] { "line1", "line2", "line3" }, Tokens("line1\r\nline2\r\nline3"));
+    }
+
+    // -------- Single non-whitespace character --------
+
+    [Fact]
+    public void Single_NonWhitespace_Char_YieldsSingleToken()
+    {
+        EqualSeq(new[] { "x" }, Tokens("x"));
+    }
+
+    [Fact]
+    public void Single_UnicodeWord_WithSurroundingUnicodeWhitespace()
+    {
+        EqualSeq(new[] { "word" }, Tokens("\u3000word\u3000"));
+    }
+
+    // -------- FormFeed separator --------
+
+    [Fact]
+    public void FormFeed_Is_Whitespace()
+    {
+        EqualSeq(new[] { "a", "b" }, Tokens("a\fb"));
+    }
+
+    // -------- Multiple consecutive whitespace types --------
+
+    [Fact]
+    public void Mixed_Whitespace_Types_Between_Tokens_CoalesceToSingle()
+    {
+        EqualSeq(new[] { "one", "two" }, Tokens("one \t\r\n\f\v two"));
+    }
+
+    // -------- Many small tokens --------
+
+    [Fact]
+    public void Many_SingleChar_Tokens()
+    {
+        var input = string.Join(" ", Enumerable.Repeat("x", 1000));
+        var result = Tokens(input);
+        Assert.Equal(1000, result.Count);
+        Assert.All(result, t => Assert.Equal("x", t));
+    }
 }
 

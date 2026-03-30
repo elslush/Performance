@@ -3594,4 +3594,171 @@ public sealed class ResizableByteWriterTests
         // Assert
         Assert.Equal(10L, writer.Length);
     }
+
+    // -------- Advance(0) behavior --------
+
+    [Fact]
+    public void Advance_Zero_WithReservation_ClearsReservation()
+    {
+        using var w = new ResizableByteWriter();
+        _ = w.GetSpan(16);
+
+        w.Advance(0);
+
+        Assert.Throws<InvalidOperationException>(() => w.Advance(1));
+        Assert.Equal(0, w.Length);
+    }
+
+    [Fact]
+    public void Advance_Zero_WithoutReservation_IsNoOp()
+    {
+        using var w = new ResizableByteWriter(initialCapacity: 0);
+
+        // No GetSpan/GetMemory called; Advance(0) should not throw
+        // because 0 <= _available (0)
+        w.Advance(0);
+        Assert.Equal(0, w.Length);
+    }
+
+    // -------- Empty write edge cases --------
+
+    [Fact]
+    public void Write_EmptySpan_IsNoOp()
+    {
+        using var w = new ResizableByteWriter(initialCapacity: 4);
+        w.Write([1, 2]);
+        w.Write(ReadOnlySpan<byte>.Empty);
+
+        Assert.Equal(2, w.Length);
+        Assert.Equal(new byte[] { 1, 2 }, w.WrittenSpan.ToArray());
+    }
+
+    [Fact]
+    public void Write_EmptyArray_IsNoOp()
+    {
+        using var w = new ResizableByteWriter(initialCapacity: 4);
+        w.Write([1]);
+        w.Write(Array.Empty<byte>());
+
+        Assert.Equal(1, w.Length);
+        Assert.Equal(new byte[] { 1 }, w.WrittenSpan.ToArray());
+    }
+
+    [Fact]
+    public void Write_EmptyMemory_IsNoOp()
+    {
+        using var w = new ResizableByteWriter();
+        w.Write([5]);
+        w.Write(ReadOnlyMemory<byte>.Empty);
+
+        Assert.Equal(1, w.Length);
+        Assert.Equal(new byte[] { 5 }, w.WrittenSpan.ToArray());
+    }
+
+    // -------- Disposal edge cases --------
+
+    [Fact]
+    public void Dispose_WithoutWriting_IsClean()
+    {
+        var w = new ResizableByteWriter(initialCapacity: 0);
+        w.Dispose();
+        // No exception expected
+    }
+
+    [Fact]
+    public void After_Dispose_Write_Overloads_Throw()
+    {
+        var w = new ResizableByteWriter();
+        w.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => w.Write(new byte[] { 1 }));
+        Assert.Throws<ObjectDisposedException>(() => w.Write(new ReadOnlyMemory<byte>([1])));
+        Assert.Throws<ObjectDisposedException>(() => w.Write(new byte[] { 1 }, 0, 1));
+        Assert.Throws<ObjectDisposedException>(() => w.Advance(0));
+        Assert.Throws<ObjectDisposedException>(() => _ = w.Length);
+    }
+
+    // -------- Constructor with pool-only --------
+
+    [Fact]
+    public void Constructor_PoolOnly_CreatesEmptyWriter()
+    {
+        using var w = new ResizableByteWriter(ArrayPool<byte>.Shared);
+
+        Assert.Equal(0, w.Length);
+        Assert.Empty(w.WrittenSpan.ToArray());
+    }
+
+    // -------- Interleaved GetSpan/GetMemory --------
+
+    [Fact]
+    public void GetMemory_After_GetSpan_Replaces_Reservation()
+    {
+        using var w = new ResizableByteWriter();
+
+        _ = w.GetSpan(4);
+        var mem = w.GetMemory(8);
+        mem.Span[0] = 99;
+        w.Advance(1);
+
+        Assert.Equal(new byte[] { 99 }, w.WrittenSpan.ToArray());
+    }
+
+    // -------- Write after Reset --------
+
+    [Fact]
+    public void Reset_ThenMixedWrites_ProducesCorrectData()
+    {
+        using var w = new ResizableByteWriter(initialCapacity: 4);
+        w.Write([1, 2, 3]);
+        w.Reset();
+        w.WriteByte(42);
+        w.Write([10, 20]);
+
+        Assert.Equal(3, w.Length);
+        Assert.Equal(new byte[] { 42, 10, 20 }, w.WrittenSpan.ToArray());
+    }
+
+    // -------- Multiple growth cycles --------
+
+    [Fact]
+    public void Multiple_Growth_Cycles_PreserveAllData()
+    {
+        using var w = new ResizableByteWriter(initialCapacity: 2);
+
+        for (int i = 0; i < 500; i++)
+            w.WriteByte((byte)(i % 256));
+
+        Assert.Equal(500, w.Length);
+        for (int i = 0; i < 500; i++)
+            Assert.Equal((byte)(i % 256), w.WrittenSpan[i]);
+    }
+
+    // -------- Stream CopyTo integration --------
+
+    [Fact]
+    public async Task Stream_WriteAsync_Memory_Overload()
+    {
+        using var w = new ResizableByteWriter();
+        var data = new byte[] { 7, 8, 9 }.AsMemory();
+
+        await w.WriteAsync(data, TestContext.Current.CancellationToken);
+
+        Assert.Equal(new byte[] { 7, 8, 9 }, w.WrittenSpan.ToArray());
+    }
+
+    // -------- Large single write --------
+
+    [Fact]
+    public void Write_LargePayload_PreservesIntegrity()
+    {
+        using var w = new ResizableByteWriter(initialCapacity: 0);
+        var payload = new byte[100_000];
+        new Random(42).NextBytes(payload);
+
+        w.Write(payload);
+
+        Assert.Equal(100_000, w.Length);
+        Assert.True(w.WrittenSpan.SequenceEqual(payload));
+    }
 }

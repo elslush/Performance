@@ -1933,4 +1933,263 @@ public sealed partial class ResizableSpanWriterTests_Dispose
             LastClearArray = clearArray;
         }
     }
+
+    // -------- Constructor validation --------
+
+    [Fact]
+    public void Constructor_NullPool_ThrowsArgumentNullException()
+    {
+        var ex = Assert.Throws<ArgumentNullException>(() => new ResizableSpanWriter<byte>(null!, 8));
+        Assert.Equal("pool", ex.ParamName);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(-100)]
+    [InlineData(int.MinValue)]
+    public void Constructor_NegativeCapacity_ThrowsArgumentOutOfRangeException(int capacity)
+    {
+        Assert.Throws<ArgumentOutOfRangeException>(() => new ResizableSpanWriter<byte>(capacity));
+    }
+
+    // -------- Negative sizeHint --------
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(int.MinValue)]
+    public void GetSpan_NegativeSizeHint_ThrowsArgumentOutOfRangeException(int sizeHint)
+    {
+        using var w = new ResizableSpanWriter<byte>();
+        Assert.Throws<ArgumentOutOfRangeException>(() => w.GetSpan(sizeHint));
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(int.MinValue)]
+    public void GetMemory_NegativeSizeHint_ThrowsArgumentOutOfRangeException(int sizeHint)
+    {
+        using var w = new ResizableSpanWriter<byte>();
+        Assert.Throws<ArgumentOutOfRangeException>(() => w.GetMemory(sizeHint));
+    }
+
+    // -------- Advance(0) behavior --------
+
+    [Fact]
+    public void Advance_Zero_WithReservation_ClearsReservation()
+    {
+        using var w = new ResizableSpanWriter<byte>();
+        _ = w.GetSpan(16);
+
+        w.Advance(0);
+
+        Assert.Throws<InvalidOperationException>(() => w.Advance(1));
+        Assert.Equal(0, w.WrittenSpan.Length);
+    }
+
+    [Fact]
+    public void Advance_Zero_WithoutReservation_IsNoOp()
+    {
+        using var w = new ResizableSpanWriter<byte>(initialCapacity: 0);
+        w.Advance(0);
+        Assert.Equal(0, w.WrittenSpan.Length);
+    }
+
+    // -------- Reference type Reset clears array --------
+
+    [Fact]
+    public void Reset_ReferenceType_ClearsWrittenElements()
+    {
+        var pool = new TrackingArrayPool<string>();
+        var w = new ResizableSpanWriter<string>(pool, initialCapacity: 4);
+        w.Write("hello");
+        w.Write("world");
+
+        w.Reset();
+
+        Assert.Equal(0, w.WrittenSpan.Length);
+        // After reset, write new data to verify no stale references
+        w.Write("fresh");
+        Assert.Equal(new[] { "fresh" }, w.WrittenSpan.ToArray());
+        w.Dispose();
+    }
+
+    [Fact]
+    public void Dispose_ReferenceType_PassesClearArrayTrue()
+    {
+        var pool = new TrackingArrayPool<string>();
+        var w = new ResizableSpanWriter<string>(pool, initialCapacity: 4);
+        w.Write("test");
+        w.Dispose();
+
+        Assert.True(pool.LastClearArray);
+    }
+
+    [Fact]
+    public void Dispose_ValueType_PassesClearArrayFalse()
+    {
+        var pool = new TrackingArrayPool<int>();
+        var w = new ResizableSpanWriter<int>(pool, initialCapacity: 4);
+        w.Write(42);
+        w.Dispose();
+
+        Assert.False(pool.LastClearArray);
+    }
+
+    // -------- WrittenMemory property --------
+
+    [Fact]
+    public void WrittenMemory_ReturnsCorrectData()
+    {
+        using var w = new ResizableSpanWriter<int>();
+        w.Write(1);
+        w.Write(2);
+        w.Write(3);
+
+        var mem = w.WrittenMemory;
+
+        Assert.Equal(3, mem.Length);
+        Assert.Equal(new[] { 1, 2, 3 }, mem.ToArray());
+    }
+
+    [Fact]
+    public void WrittenMemory_Empty_ReturnsEmptyMemory()
+    {
+        using var w = new ResizableSpanWriter<byte>();
+        Assert.Equal(0, w.WrittenMemory.Length);
+    }
+
+    [Fact]
+    public void WrittenMemory_AfterDispose_Throws()
+    {
+        var w = new ResizableSpanWriter<int>();
+        w.Write(42);
+        w.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => _ = w.WrittenMemory);
+    }
+
+    // -------- Empty writes --------
+
+    [Fact]
+    public void Write_EmptySpan_IsNoOp()
+    {
+        using var w = new ResizableSpanWriter<int>();
+        w.Write(42);
+        w.Write(ReadOnlySpan<int>.Empty);
+
+        Assert.Equal(1, w.WrittenSpan.Length);
+        Assert.Equal(42, w.WrittenSpan[0]);
+    }
+
+    [Fact]
+    public void Write_EmptyArray_IsNoOp()
+    {
+        using var w = new ResizableSpanWriter<byte>();
+        w.Write(1);
+        w.Write(Array.Empty<byte>());
+
+        Assert.Equal(1, w.WrittenSpan.Length);
+    }
+
+    [Fact]
+    public void Write_EmptyMemory_IsNoOp()
+    {
+        using var w = new ResizableSpanWriter<char>();
+        w.Write('x');
+        w.Write(ReadOnlyMemory<char>.Empty);
+
+        Assert.Equal(1, w.WrittenSpan.Length);
+    }
+
+    // -------- Over-advance --------
+
+    [Fact]
+    public void Advance_OverReservation_ThrowsInvalidOperationException()
+    {
+        using var w = new ResizableSpanWriter<byte>();
+        _ = w.GetSpan(4);
+
+        Assert.Throws<InvalidOperationException>(() => w.Advance(5));
+    }
+
+    // -------- Interleaved GetSpan/GetMemory --------
+
+    [Fact]
+    public void GetMemory_After_GetSpan_Replaces_Reservation()
+    {
+        using var w = new ResizableSpanWriter<int>();
+        _ = w.GetSpan(4);
+        var mem = w.GetMemory(8);
+        mem.Span[0] = 77;
+        w.Advance(1);
+
+        Assert.Equal(new[] { 77 }, w.WrittenSpan.ToArray());
+    }
+
+    // -------- Multiple Reset cycles --------
+
+    [Fact]
+    public void MultipleResetCycles_WriteCorrectly()
+    {
+        using var w = new ResizableSpanWriter<int>(initialCapacity: 4);
+
+        for (int cycle = 0; cycle < 5; cycle++)
+        {
+            w.Write(cycle);
+            w.Write(cycle * 10);
+            Assert.Equal(2, w.WrittenSpan.Length);
+            Assert.Equal(cycle, w.WrittenSpan[0]);
+            Assert.Equal(cycle * 10, w.WrittenSpan[1]);
+            w.Reset();
+            Assert.Equal(0, w.WrittenSpan.Length);
+        }
+    }
+
+    // -------- Large single write --------
+
+    [Fact]
+    public void Write_LargePayload_PreservesIntegrity()
+    {
+        using var w = new ResizableSpanWriter<int>(initialCapacity: 0);
+        var payload = Enumerable.Range(0, 50_000).ToArray();
+
+        w.Write(payload);
+
+        Assert.Equal(50_000, w.WrittenSpan.Length);
+        Assert.True(w.WrittenSpan.SequenceEqual(payload));
+    }
+
+    // -------- Constructor pool-only --------
+
+    [Fact]
+    public void Constructor_PoolOnly_CreatesEmptyWriter()
+    {
+        using var w = new ResizableSpanWriter<byte>(ArrayPool<byte>.Shared);
+        Assert.Equal(0, w.WrittenSpan.Length);
+    }
+
+    // -------- IMemoryOwner after dispose --------
+
+    [Fact]
+    public void IMemoryOwner_Memory_AfterDispose_Throws()
+    {
+        var w = new ResizableSpanWriter<byte>();
+        w.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => _ = ((IMemoryOwner<byte>)w).Memory);
+    }
+
+    // -------- Write after dispose --------
+
+    [Fact]
+    public void Write_AfterDispose_AllOverloads_Throw()
+    {
+        var w = new ResizableSpanWriter<int>();
+        w.Dispose();
+
+        Assert.Throws<ObjectDisposedException>(() => w.Write(1));
+        Assert.Throws<ObjectDisposedException>(() => w.Write(new[] { 1 }));
+        Assert.Throws<ObjectDisposedException>(() => w.Write(new ReadOnlyMemory<int>([1])));
+        Assert.Throws<ObjectDisposedException>(() => w.Reset());
+    }
 }
